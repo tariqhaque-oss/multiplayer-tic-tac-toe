@@ -1,40 +1,275 @@
-Following are instructions to deploy local and serve international
+Following are instructions to deploy local and serve international, plus a
+breakdown of the current architecture and what it would take to move this
+off the laptop and onto a cloud provider.
+
+
+====================================================================
+1. CURRENT ARCHITECTURE (as of 2026-07-14)
+====================================================================
+
+Everything runs on one Windows laptop on a residential internet connection.
+There is no cloud involvement anywhere in this stack today.
+
+Internet
+   |
+   |  (ISP-assigned public IP, changes occasionally - home connection,
+   |   no static IP)
+   v
+Home router (192.168.0.1)
+   - Port forward: TCP 80  -> 192.168.0.208 (this laptop)
+   - Port forward: TCP 443 -> 192.168.0.208 (this laptop)
+   - Address Reservation: this laptop's MAC (34-E1-2D-4B-D2-91) is always
+     handed out 192.168.0.208 by the router's DHCP, so the port forwards
+     above stay valid across reboots/reconnects
+   v
+This laptop (LAPTOP-8JUL17OD, 192.168.0.208)
+   |
+   |-- Caddy (infra/Caddyfile), listening on 0.0.0.0:80 and 0.0.0.0:443
+   |     - Automatic HTTPS: gets/renews a Let's Encrypt certificate for
+   |       alaab.ai on its own (ACME HTTP-01 challenge over port 80)
+   |     - reverse_proxy's everything to localhost:8000
+   |     - Admin API on 127.0.0.1:2019 (local only, Caddy's own control port)
+   |
+   |-- uvicorn (backend/main.py -> FastAPI app), listening on 0.0.0.0:8000
+   |     - Not exposed directly to the internet; only reachable via Caddy
+   |       (or directly on the LAN/localhost for local testing)
+   |     - Single process, single worker. In-memory Python dict `games`
+   |       (see backend/game.py) holds all live board state and WebSocket
+   |       connections - this state lives ONLY in this process's memory.
+   |       Restarting uvicorn drops every in-progress game.
+   |
+   |-- Postgres 17 cluster, self-managed, listening on 127.0.0.1:5433
+   |     - Data directory: backend/pgdata (gitignored, machine-specific)
+   |     - This is a SEPARATE cluster from the Windows service
+   |       "postgresql-x64-17" that also happens to be installed on this
+   |       machine and listens on the default port 5432 - that service is
+   |       unrelated to this app and is not used by it.
+   |     - Holds: users, password_history, email_verification_tokens,
+   |       password_reset_tokens, game_results (see backend/migrations/)
+   |
+   `-- Scheduled Task "TicTacToe-DDNS-Update" (Windows Task Scheduler)
+         - Runs infra/ddns_update.py every 5 minutes via
+           C:\Python313\python.exe
+         - Looks up this machine's current public IP (api.ipify.org) and,
+           if it has changed, PATCHes the Cloudflare A record for alaab.ai
+           to point at it (proxied=false - Cloudflare is DNS-only here;
+           Caddy does its own TLS instead of using Cloudflare's proxy/TLS)
+         - This is the ONLY piece of this stack that survives as a proper
+           background service across logins/reboots. Postgres, uvicorn,
+           and Caddy are all started by hand in terminals per
+           "deployment guide.txt" section 2, and do NOT auto-start.
+
+DNS: alaab.ai's A record lives in Cloudflare, managed by the DDNS task
+above. Domain registration/DNS zone is external to this repo.
+
+Outbound email: Gmail SMTP via an App Password (backend/email_utils.py) -
+used for signup verification links and password reset links. This is the
+one component of the stack that already talks to an external cloud service.
+
+Secrets: backend/.env (DB credentials, SESSION_SECRET, Gmail sender/app
+password) and infra/.env (Cloudflare API token, zone ID, record ID) are
+both plaintext files on disk, gitignored, never committed. Nothing rotates
+them automatically.
+
+Reliability characteristics of this setup, plainly stated:
+- If the laptop sleeps, loses power, or reboots, the site goes down until
+  someone manually restarts Postgres, uvicorn, and Caddy.
+- If the ISP rotates the public IP, the site is unreachable for up to
+  ~5 minutes until the next DDNS task run updates DNS - and possibly
+  longer if DNS caching adds to that.
+- There is no load balancing, no auto-restart-on-crash, no automated
+  backups of backend/pgdata, and no monitoring/alerting.
+- Capacity is whatever this one laptop and one home upload connection
+  can handle - fine for a handful of friends, not for real traffic.
+
+
+====================================================================
+2. RUNNING IT LOCALLY (day to day)
+====================================================================
 
 One-time setup (already done on this machine):
-- PostgreSQL 17 installed via winget (Windows service "postgresql-x64-17" on port 5432 - not used by this app)
+- PostgreSQL 17 installed via winget (Windows service "postgresql-x64-17"
+  on port 5432 - not used by this app, ignore it)
 - A separate, self-managed Postgres cluster for this app lives at:
     backend/pgdata          (data directory, port 5433)
-  DB/session credentials are in:
-    backend/.env            (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD, SESSION_SECRET)
-  Do not commit or share backend/.env or backend/pgdata - they contain real credentials.
+  DB/session/email credentials are in:
+    backend/.env            (PGHOST, PGPORT, PGDATABASE, PGUSER,
+                              PGPASSWORD, SESSION_SECRET, GMAIL_SENDER,
+                              GMAIL_APP_PASSWORD)
+  Do not commit or share backend/.env or backend/pgdata - they contain
+  real credentials.
 - Python deps: cd backend && python -m pip install -r requirements.txt
+- Caddy installed via winget (CaddyServer.Caddy). Not on PATH by default;
+  the binary lives at:
+    %LOCALAPPDATA%\Microsoft\WinGet\Links\caddy.exe
+- Cloudflare API credentials for the alaab.ai zone are in infra/.env
+  (CF_API_TOKEN, CF_ZONE_ID, CF_RECORD_ID, CF_RECORD_NAME)
+- Windows Scheduled Task "TicTacToe-DDNS-Update" already runs
+  infra/ddns_update.py every 5 minutes - nothing to start manually for DNS
+- Router port forwarding (80, 443 -> 192.168.0.208) and the DHCP address
+  reservation for this laptop are already configured on the router - see
+  section 1. If this ever moves to a different router, redo both.
 
-Every time you want to play:
+Every time you want to play (local-only, no internet access needed):
 
 terminal1 (database - only if not already running):
 cd backend
 "C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata -l pglog.txt start
 (to stop later: "C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata stop)
+(check status: "C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata status)
 
 terminal2 (app server):
 cd backend
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
-terminal3 (public tunnel):
-cd backend
-ngrok http 8000
-(authtoken is already saved in ngrok's own config - no need to re-enter it)
+Then open http://localhost:8000 yourself. Anyone else on the same LAN can
+use http://192.168.0.208:8000 directly - no tunnel/Caddy needed for that.
 
-Then:
-1. Open the ngrok https URL yourself, go to /signup, create an account, then /login.
-2. Send the same ngrok URL to the other player - they sign up/log in the same way.
-3. First logged-in player to open the game becomes X, the second becomes O, anyone after that is a spectator.
-4. Free ngrok URLs change every time you restart ngrok - resend the new link if it drops.
+Every time you want it reachable from the public internet at
+https://alaab.ai (in addition to the two terminals above):
 
-Address Reservation
-Reserve IP addresses for specific devices connected to the router.
-Add
-Device Name	MAC Address	Reserved IP Address	Status	Modify
-LAPTOP-8JUL17OD
-34-E1-2D-4B-D2-91
-192.168.0.208
+terminal3 (reverse proxy + automatic HTTPS):
+cd infra
+"%LOCALAPPDATA%\Microsoft\WinGet\Links\caddy.exe" run --config Caddyfile
+
+Leave all three terminals open. https://alaab.ai now works for anyone,
+anywhere, as long as this laptop is on, awake, and connected - DNS and
+port forwarding are already handled per section 1.
+
+To confirm everything is actually live:
+  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/login   (expect 200)
+  curl -s -o /dev/null -w "%{http_code}\n" https://alaab.ai/login        (expect 200)
+  curl -s -o /dev/null -w "%{http_code}\n" http://alaab.ai/login         (expect 308, redirects to https)
+
+First logged-in player to open a given game becomes X, the second becomes
+O, anyone after that is a spectator. Everyone signs up/logs in with their
+own email via /signup and /login.
+
+Quick/casual alternative (no domain, no router changes, no Caddy): expose
+port 8000 with a tunnel instead, e.g. `ngrok http 8000` (authtoken already
+saved in ngrok's own config), and share the resulting URL. This is what
+the old, pre-domain version of this guide described - it still works, but
+free ngrok URLs change every time you restart ngrok.
+
+Router reference:
+Address Reservation - reserves an IP for a specific device on the router.
+  Device Name:            LAPTOP-8JUL17OD
+  MAC Address:            34-E1-2D-4B-D2-91
+  Reserved IP Address:    192.168.0.208
+
+
+====================================================================
+3. WHAT IT WOULD TAKE TO MOVE THIS FROM LOCAL TO CLOUD
+====================================================================
+
+The app code itself (FastAPI + Postgres + plain HTML/JS) is already
+cloud-portable - it doesn't need a rewrite. What needs to change is
+everything *around* it: where it runs, how it's reached, and how state is
+held. Roughly in order of how much they'd force a design change:
+
+3a. Compute (where uvicorn runs)
+   - Today: bare `python -m uvicorn` in a terminal window on a laptop.
+   - Cloud: package it (a Dockerfile is the standard move - base image
+     python:3.x-slim, pip install -r requirements.txt, CMD uvicorn
+     main:app --host 0.0.0.0 --port 8000) and run it on something that
+     restarts it automatically: a PaaS (Render, Fly.io, Railway,
+     Heroku-style), a single cloud VM with systemd/Docker
+     `--restart=always`, or a container platform (ECS/Cloud Run/AKS/etc).
+   - Any of these gives you crash recovery and normal deploys for free -
+     the laptop setup has neither.
+
+3b. Database
+   - Today: self-managed Postgres cluster in backend/pgdata on this
+     laptop, no automated backups, no replication.
+   - Cloud: use a managed Postgres (RDS, Cloud SQL, Supabase, Neon,
+     Render Postgres, etc). Migration path: run the same files already in
+     backend/migrations/ (001-004, in order) against the new managed DB,
+     then pg_dump the local cluster and pg_restore it if you need to keep
+     existing accounts/history. Point backend/.env's PGHOST/PGPORT/
+     PGUSER/PGPASSWORD/PGDATABASE at the managed instance - db.py and the
+     rest of the app don't need to change at all.
+   - This also removes the biggest single point of data loss in the
+     current setup: nothing is backing up backend/pgdata today.
+
+3c. Networking, DNS, and TLS
+   - Today: home router port-forwards 80/443 to this laptop; Caddy gets
+     its own Let's Encrypt cert via ACME HTTP-01; a Scheduled Task keeps
+     Cloudflare DNS pointed at the laptop's changing public IP (DDNS).
+   - Cloud: the DDNS updater (infra/ddns_update.py) goes away entirely -
+     cloud providers give you a stable IP or hostname (a load balancer,
+     an Elastic IP, a platform-assigned domain) that doesn't change, so
+     there's nothing to keep in sync. Update the alaab.ai DNS record in
+     Cloudflare to point at that stable target instead (A record to a
+     static IP, or CNAME to the provider's hostname) and remove the
+     Windows Scheduled Task.
+   - TLS: either keep using Caddy (it works identically on a cloud VM -
+     just no port-forwarding/DDNS needed since the VM has a real public
+     IP) or use the platform's built-in TLS/load balancer (most PaaS and
+     managed container platforms terminate HTTPS for you, making Caddy
+     unnecessary).
+
+3d. In-memory game/WebSocket state (backend/game.py)
+   - Today: the `games` dict and all active WebSocket connections live in
+     the memory of one uvicorn process. This is fine as long as there is
+     exactly one process.
+   - Cloud risk: the moment you run more than one instance/replica for
+     scale or zero-downtime deploys, players can land on different
+     instances that don't share `games`, silently breaking matches. Two
+     ways to handle this when that becomes necessary:
+       1. Keep it to a single instance/replica (simplest - fits current
+          traffic levels fine, just document it as a constraint), or
+       2. Move shared game state to something external (e.g. Redis) and
+          make sure a given game's WebSocket traffic is sticky to one
+          instance (or route moves through the shared store instead of
+          in-process memory).
+   - Nothing needs to change for this today at current scale - it's a
+     "know about it before you add a second instance" item, not a
+     blocker to a first cloud deploy.
+
+3e. Secrets
+   - Today: backend/.env and infra/.env are plaintext files on disk,
+     manually created, gitignored.
+   - Cloud: move these values into whatever secrets facility the target
+     platform provides (env vars set in the platform's dashboard/CLI, or
+     a real secrets manager like AWS Secrets Manager / GCP Secret
+     Manager). Stop shipping a .env file at all in that environment -
+     config.py already just reads from os.environ, so this requires no
+     code change, only where the values come from.
+   - Also worth doing at that point: rotate SESSION_SECRET, PGPASSWORD,
+     GMAIL_APP_PASSWORD, and the Cloudflare API token, since they've
+     existed as plaintext files on a personal laptop.
+
+3f. Outbound email
+   - Today: Gmail SMTP with an App Password - works fine at this volume
+     and requires no change to move to the cloud (it's already an
+     external service). If volume ever grows, a transactional email
+     provider (SES, Postmark, SendGrid) would be the usual upgrade, but
+     that's optional, not required for a cloud move.
+
+3g. Observability
+   - Today: flat log files (pglog.txt, ddns_update.log, and whatever's
+     redirected from uvicorn/Caddy's stdout) on the laptop's disk, read
+     by hand.
+   - Cloud: most platforms give you centralized log viewing/search out of
+     the box just by writing to stdout/stderr (which uvicorn/Caddy/Python
+     already do by default) - so this mostly "just works" once you're
+     not manually redirecting to local files. Add real alerting
+     (uptime check on https://<domain>/login, DB connection failures)
+     once this matters to someone other than you.
+
+3h. Deploys
+   - Today: manually stop terminals, `git pull`, restart terminals.
+   - Cloud: a normal CI/CD path - push to a branch, platform builds the
+     Docker image (or the PaaS auto-detects and builds), runs
+     backend/migrations/ if new ones were added, and restarts. This is
+     the point where a Dockerfile (3a) and a migration-runner step
+     (rather than manually psql-ing each numbered file) start to matter.
+
+Net summary: no application code changes are required to move to the
+cloud at the traffic level this app sees today. The changes are entirely
+in the deployment surface: containerize uvicorn, point it at a managed
+Postgres, replace the home-network DNS/port-forward/DDNS dance with a
+stable cloud endpoint, and move secrets out of plaintext .env files. The
+one thing that WOULD force a code change is horizontal scaling of the
+game/WebSocket layer (3d) - not needed until/unless a single instance
+stops being enough.
