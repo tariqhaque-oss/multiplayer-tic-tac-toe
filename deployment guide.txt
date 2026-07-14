@@ -30,3 +30,11 @@ Then:
 2. Send the same ngrok URL to the other player - they sign up/log in the same way.
 3. First logged-in player to open the game becomes X, the second becomes O, anyone after that is a spectator.
 4. Free ngrok URLs change every time you restart ngrok - resend the new link if it drops.
+
+Address Reservation
+Reserve IP addresses for specific devices connected to the router.
+Add
+Device Name	MAC Address	Reserved IP Address	Status	Modify
+LAPTOP-8JUL17OD
+34-E1-2D-4B-D2-91
+192.168.0.208
