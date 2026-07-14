@@ -1,0 +1,14 @@
+# Secrets - never commit
+backend/.env
+
+# Local Postgres cluster data (binary, machine-specific)
+backend/pgdata/
+backend/pglog.txt
+
+# Python
+backend/__pycache__/
+*.pyc
+
+# Claude Code local session state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

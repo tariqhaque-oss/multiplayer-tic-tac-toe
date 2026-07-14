@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Multiplayer Tic Tac Toe</title>
+
+    <style>
+        :root {
+            --bg: #f4f4f4;
+            --panel-bg: #ffffff;
+            --text: #111111;
+            --border: #222222;
+            --cell-bg: #ffffff;
+            --cell-border: #000000;
+            --cell-hover: #eaeaea;
+            --x-color: #2563eb;
+            --o-color: #dc2626;
+            --win-bg: #fde68a;
+            --accent: #16a34a;
+            --error: #dc2626;
+            --input-bg: #ffffff;
+            --input-border: #999999;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #121212;
+                --panel-bg: #1e1e1e;
+                --text: #f0f0f0;
+                --border: #444444;
+                --cell-bg: #1e1e1e;
+                --cell-border: #666666;
+                --cell-hover: #2a2a2a;
+                --x-color: #60a5fa;
+                --o-color: #f87171;
+                --win-bg: #78350f;
+                --accent: #4ade80;
+                --error: #f87171;
+                --input-bg: #2a2a2a;
+                --input-border: #666666;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .layout {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 40px;
+        }
+
+        .game-area {
+            text-align: center;
+        }
+
+        #lobby {
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto;
+            background: var(--panel-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 30px;
+        }
+
+        #lobby h2 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 20px;
+        }
+
+        #lobby hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 25px 0;
+        }
+
+        #lobby label {
+            display: block;
+            margin: 10px 0 5px;
+            font-size: 14px;
+        }
+
+        #lobby input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+        }
+
+        #lobby button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+        }
+
+        #randomBtn {
+            background: var(--accent);
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .lobby-message {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .lobby-message.error {
+            color: var(--error);
+        }
+
+        #keyDisplay {
+            font-size: 15px;
+            margin: 10px 0;
+            padding: 10px;
+            background: var(--input-bg);
+            border: 1px dashed var(--input-border);
+            border-radius: 4px;
+            display: none;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            font-size: 40px;
+            font-family: inherit;
+            font-weight: bold;
+            border: 2px solid var(--cell-border);
+            background: var(--cell-bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            padding: 0;
+            transition: background-color 0.15s ease, transform 0.1s ease;
+        }
+
+        .cell:hover:not(:disabled) {
+            background: var(--cell-hover);
+        }
+
+        .cell:disabled {
+            cursor: not-allowed;
+        }
+
+        .cell:focus-visible {
+            outline: 3px solid var(--accent);
+            outline-offset: -3px;
+        }
+
+        .cell[data-value="X"] {
+            color: var(--x-color);
+        }
+
+        .cell[data-value="O"] {
+            color: var(--o-color);
+        }
+
+        .cell.win {
+            background: var(--win-bg);
+        }
+
+        .cell.mark-in {
+            animation: mark-in 0.15s ease-out;
+        }
+
+        @keyframes mark-in {
+            from {
+                transform: scale(0.4);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .scorecard {
+            width: 220px;
+            background: var(--panel-bg);
+            border: 2px solid var(--border);
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .scorecard h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+
+        .score-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            margin: 12px 0;
+        }
+
+        #status, #player, #message {
+            margin: 15px;
+            font-size: 20px;
+            min-height: 28px;
+        }
+
+        #status.your-turn {
+            animation: pulse 1.2s ease-in-out infinite;
+            font-weight: bold;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        button {
+            padding: 10px 20px;
+            margin-top: 15px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        @media (max-width: 480px) {
+            #board {
+                grid-template-columns: repeat(3, 28vw);
+            }
+
+            .cell {
+                width: 28vw;
+                height: 28vw;
+                font-size: 10vw;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Multiplayer Tic Tac Toe</h1>
+
+<div id="lobby">
+    <h2>Join Random Game</h2>
+    <button id="randomBtn" type="button">Join Random Game</button>
+
+    <hr>
+
+    <h2>Create a Private Game</h2>
+    <label for="createKey">Secret phrase (5+ words, share with your friend)</label>
+    <input type="text" id="createKey" placeholder="e.g. purple elephant dances wildly tonight">
+    <button type="button" id="createBtn">Create Game</button>
+
+    <hr>
+
+    <h2>Join a Private Game</h2>
+    <label for="joinKey">Enter the phrase your friend gave you</label>
+    <input type="text" id="joinKey" placeholder="Enter the shared phrase">
+    <button type="button" id="joinBtn">Join Game</button>
+
+    <div id="lobbyMessage" class="lobby-message"></div>
+</div>
+
+<div class="layout" id="gameWrapper" style="display:none;">
+    <div class="game-area">
+        <div id="player"></div>
+        <div id="keyDisplay"></div>
+        <div id="status"></div>
+        <div id="message"></div>
+        <div id="board"></div>
+
+        <button onclick="resetGame()">Reset Match</button>
+        <button type="button" onclick="leaveGame()">Leave Game</button>
+        <a href="/logout"><button type="button">Log Out</button></a>
+    </div>
+
+    <div class="scorecard">
+        <h2>Scorecard</h2>
+
+        <div class="score-row">
+            <span>X Wins</span>
+            <strong id="scoreX">0</strong>
+        </div>
+
+        <div class="score-row">
+            <span>O Wins</span>
+            <strong id="scoreO">0</strong>
+        </div>
+
+        <div class="score-row">
+            <span>Draws</span>
+            <strong id="scoreDraw">0</strong>
+        </div>
+
+        <hr>
+
+        <div class="score-row">
+            <span>Players</span>
+            <strong id="playersConnected">0</strong>
+        </div>
+    </div>
+</div>
+
+<script>
+    const lobbyDiv = document.getElementById("lobby");
+    const gameWrapperDiv = document.getElementById("gameWrapper");
+    const lobbyMessageDiv = document.getElementById("lobbyMessage");
+    const keyDisplayDiv = document.getElementById("keyDisplay");
+
+    const boardDiv = document.getElementById("board");
+    const statusDiv = document.getElementById("status");
+    const playerDiv = document.getElementById("player");
+    const messageDiv = document.getElementById("message");
+
+    const scoreX = document.getElementById("scoreX");
+    const scoreO = document.getElementById("scoreO");
+    const scoreDraw = document.getElementById("scoreDraw");
+    const playersConnected = document.getElementById("playersConnected");
+
+    const winningCombinations = [
+        [0,1,2], [3,4,5], [6,7,8],
+        [0,3,6], [1,4,7], [2,5,8],
+        [0,4,8], [2,4,6]
+    ];
+
+    let socket = null;
+    let myPlayer = null;
+    let currentPlayer = null;
+    let winner = null;
+    let previousBoard = [];
+
+    const socketProtocol = location.protocol === "https:" ? "wss" : "ws";
+
+    const closeErrors = {
+        4402: "That phrase is already in use by another game. Try a different one.",
+        4403: "Phrase must be at least 5 words.",
+        4404: "No game found with that phrase.",
+        4405: "That game already has two players."
+    };
+
+    function showLobbyError(text) {
+        lobbyMessageDiv.innerText = text;
+        lobbyMessageDiv.classList.add("error");
+    }
+
+    function showLobby() {
+        gameWrapperDiv.style.display = "none";
+        lobbyDiv.style.display = "block";
+        keyDisplayDiv.style.display = "none";
+        myPlayer = null;
+        previousBoard = [];
+    }
+
+    function connect(wsUrl) {
+        lobbyMessageDiv.innerText = "";
+        lobbyMessageDiv.classList.remove("error");
+
+        socket = new WebSocket(wsUrl);
+
+        socket.onclose = function(event) {
+            if (event.code === 4401) {
+                location.href = "/login";
+                return;
+            }
+
+            if (closeErrors[event.code]) {
+                showLobbyError(closeErrors[event.code]);
+            }
+
+            showLobby();
+        };
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "player") {
+                myPlayer = data.player;
+                playerDiv.innerText = `You are: ${myPlayer}`;
+
+                lobbyDiv.style.display = "none";
+                gameWrapperDiv.style.display = "flex";
+
+                if (data.mode === "private" && data.key) {
+                    keyDisplayDiv.innerText = `Share this phrase with your friend: "${data.key}"`;
+                    keyDisplayDiv.style.display = "block";
+                } else {
+                    keyDisplayDiv.style.display = "none";
+                }
+            }
+
+            if (data.type === "state") {
+                currentPlayer = data.currentPlayer;
+                winner = data.winner;
+
+                renderBoard(data.board);
+                renderScores(data.scores, data.playersConnected);
+
+                if (data.message) {
+                    messageDiv.innerText = data.message;
+                }
+            }
+        };
+    }
+
+    document.getElementById("randomBtn").addEventListener("click", () => {
+        connect(`${socketProtocol}://${location.host}/ws?intent=random`);
+    });
+
+    document.getElementById("createBtn").addEventListener("click", () => {
+        const key = document.getElementById("createKey").value.trim();
+
+        if (key.split(/\s+/).filter(Boolean).length < 5) {
+            showLobbyError("Phrase must be at least 5 words.");
+            return;
+        }
+
+        connect(`${socketProtocol}://${location.host}/ws?intent=create&key=${encodeURIComponent(key)}`);
+    });
+
+    document.getElementById("joinBtn").addEventListener("click", () => {
+        const key = document.getElementById("joinKey").value.trim();
+
+        if (!key) {
+            showLobbyError("Enter a phrase to join.");
+            return;
+        }
+
+        connect(`${socketProtocol}://${location.host}/ws?intent=join&key=${encodeURIComponent(key)}`);
+    });
+
+    function findWinningLine(board) {
+        for (const [a, b, c] of winningCombinations) {
+            if (board[a] && board[a] === board[b] && board[b] === board[c]) {
+                return [a, b, c];
+            }
+        }
+        return [];
+    }
+
+    function renderBoard(board) {
+        boardDiv.innerHTML = "";
+
+        const winningLine = winner && winner !== "Draw" ? findWinningLine(board) : [];
+        const canPlay = myPlayer === currentPlayer && !winner;
+
+        board.forEach((cell, index) => {
+            const btn = document.createElement("button");
+
+            btn.className = "cell";
+            btn.innerText = cell;
+            btn.disabled = !canPlay || cell !== "";
+
+            if (cell) {
+                btn.dataset.value = cell;
+
+                if (previousBoard[index] !== cell) {
+                    btn.classList.add("mark-in");
+                }
+            }
+
+            if (winningLine.includes(index)) {
+                btn.classList.add("win");
+            }
+
+            btn.setAttribute("aria-label", cell ? `Cell ${index + 1}: ${cell}` : `Cell ${index + 1}: empty`);
+            btn.onclick = () => makeMove(index);
+
+            boardDiv.appendChild(btn);
+        });
+
+        previousBoard = board.slice();
+
+        statusDiv.classList.toggle("your-turn", canPlay);
+
+        if (winner) {
+            statusDiv.classList.remove("your-turn");
+            if (winner === "Draw") {
+                statusDiv.innerText = "Round draw!";
+            } else {
+                statusDiv.innerText = `${winner} wins round!`;
+            }
+        } else {
+            statusDiv.innerText = `Current turn: ${currentPlayer}`;
+        }
+    }
+
+    function renderScores(scores, count) {
+        scoreX.innerText = scores.X;
+        scoreO.innerText = scores.O;
+        scoreDraw.innerText = scores.Draw;
+        playersConnected.innerText = count;
+    }
+
+    function makeMove(index) {
+        if (myPlayer !== currentPlayer) {
+            messageDiv.innerText = "Not your turn";
+            return;
+        }
+
+        socket.send(JSON.stringify({
+            type: "move",
+            index: index
+        }));
+    }
+
+    function resetGame() {
+        socket.send(JSON.stringify({
+            type: "reset"
+        }));
+    }
+
+    function leaveGame() {
+        if (socket) {
+            socket.close();
+        }
+        showLobby();
+    }
+</script>
+
+</body>
+</html>

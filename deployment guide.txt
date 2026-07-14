@@ -1,0 +1,32 @@
+Following are instructions to deploy local and serve international
+
+One-time setup (already done on this machine):
+- PostgreSQL 17 installed via winget (Windows service "postgresql-x64-17" on port 5432 - not used by this app)
+- A separate, self-managed Postgres cluster for this app lives at:
+    backend/pgdata          (data directory, port 5433)
+  DB/session credentials are in:
+    backend/.env            (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD, SESSION_SECRET)
+  Do not commit or share backend/.env or backend/pgdata - they contain real credentials.
+- Python deps: cd backend && python -m pip install -r requirements.txt
+
+Every time you want to play:
+
+terminal1 (database - only if not already running):
+cd backend
+"C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata -l pglog.txt start
+(to stop later: "C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata stop)
+
+terminal2 (app server):
+cd backend
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+terminal3 (public tunnel):
+cd backend
+ngrok http 8000
+(authtoken is already saved in ngrok's own config - no need to re-enter it)
+
+Then:
+1. Open the ngrok https URL yourself, go to /signup, create an account, then /login.
+2. Send the same ngrok URL to the other player - they sign up/log in the same way.
+3. First logged-in player to open the game becomes X, the second becomes O, anyone after that is a spectator.
+4. Free ngrok URLs change every time you restart ngrok - resend the new link if it drops.

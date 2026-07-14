@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+psycopg2-binary
+bcrypt
+itsdangerous
+python-multipart
+websockets
+python-dotenv
