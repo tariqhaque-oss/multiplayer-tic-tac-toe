@@ -444,14 +444,9 @@ winning_combinations = [
     [0,4,8], [2,4,6]
 ]
 
-MIN_KEY_WORDS = 5
-MAX_KEY_LENGTH = 200
+KEY_RE = re.compile(r"^[A-Za-z0-9]{5}$")
 
 games = {}  # key -> game state dict, at most 2 connections each
-
-
-def word_count(text):
-    return len([w for w in text.split() if w])
 
 
 def new_game_state(mode):
@@ -527,10 +522,10 @@ async def websocket_endpoint(websocket: WebSocket, intent: str = "random", key: 
 
     user_id = session["user_id"]
     display_name = session["nickname"]
-    key = key.strip()[:MAX_KEY_LENGTH]
+    key = key.strip().upper()
 
     if intent == "create":
-        if not key or word_count(key) < MIN_KEY_WORDS:
+        if not KEY_RE.match(key):
             await reject(websocket, 4403)
             return
         if key in games:

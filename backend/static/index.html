@@ -73,7 +73,6 @@
         #lobby {
             width: 100%;
             max-width: 360px;
-            margin: 0 auto;
             background: var(--panel-bg);
             border: 2px solid var(--border);
             border-radius: 8px;
@@ -146,7 +145,6 @@
         #statsPanel {
             width: 100%;
             max-width: 360px;
-            margin: 0 auto 20px;
             background: var(--panel-bg);
             border: 2px solid var(--border);
             border-radius: 8px;
@@ -299,51 +297,53 @@
 
 <h1>Multiplayer Tic Tac Toe</h1>
 
-<div id="statsPanel">
-    <h2>Your Stats</h2>
+<div class="layout" id="pregameWrapper">
+    <div id="statsPanel">
+        <h2>Your Stats</h2>
 
-    <select id="statsFilter">
-        <option value="overall">All Games</option>
-        <option value="random">Random Games</option>
-    </select>
+        <select id="statsFilter">
+            <option value="overall">All Games</option>
+            <option value="random">Random Games</option>
+        </select>
 
-    <div class="score-row">
-        <span>Games</span>
-        <strong id="statGames">0</strong>
+        <div class="score-row">
+            <span>Games</span>
+            <strong id="statGames">0</strong>
+        </div>
+        <div class="score-row">
+            <span>Wins</span>
+            <strong id="statWins">0</strong>
+        </div>
+        <div class="score-row">
+            <span>Losses</span>
+            <strong id="statLosses">0</strong>
+        </div>
+        <div class="score-row">
+            <span>Draws</span>
+            <strong id="statDraws">0</strong>
+        </div>
     </div>
-    <div class="score-row">
-        <span>Wins</span>
-        <strong id="statWins">0</strong>
+
+    <div id="lobby">
+        <h2>Join Random Game</h2>
+        <button id="randomBtn" type="button">Join Random Game</button>
+
+        <hr>
+
+        <h2>Create a Private Game</h2>
+        <label for="createKey">Secret code (5 letters/numbers, share with your friend)</label>
+        <input type="text" id="createKey" maxlength="5" placeholder="e.g. A3F9K">
+        <button type="button" id="createBtn">Create Game</button>
+
+        <hr>
+
+        <h2>Join a Private Game</h2>
+        <label for="joinKey">Enter the code your friend gave you</label>
+        <input type="text" id="joinKey" maxlength="5" placeholder="Enter the shared code">
+        <button type="button" id="joinBtn">Join Game</button>
+
+        <div id="lobbyMessage" class="lobby-message"></div>
     </div>
-    <div class="score-row">
-        <span>Losses</span>
-        <strong id="statLosses">0</strong>
-    </div>
-    <div class="score-row">
-        <span>Draws</span>
-        <strong id="statDraws">0</strong>
-    </div>
-</div>
-
-<div id="lobby">
-    <h2>Join Random Game</h2>
-    <button id="randomBtn" type="button">Join Random Game</button>
-
-    <hr>
-
-    <h2>Create a Private Game</h2>
-    <label for="createKey">Secret phrase (5+ words, share with your friend)</label>
-    <input type="text" id="createKey" placeholder="e.g. purple elephant dances wildly tonight">
-    <button type="button" id="createBtn">Create Game</button>
-
-    <hr>
-
-    <h2>Join a Private Game</h2>
-    <label for="joinKey">Enter the phrase your friend gave you</label>
-    <input type="text" id="joinKey" placeholder="Enter the shared phrase">
-    <button type="button" id="joinBtn">Join Game</button>
-
-    <div id="lobbyMessage" class="lobby-message"></div>
 </div>
 
 <div class="layout" id="gameWrapper" style="display:none;">
@@ -387,7 +387,7 @@
 </div>
 
 <script>
-    const lobbyDiv = document.getElementById("lobby");
+    const pregameWrapperDiv = document.getElementById("pregameWrapper");
     const gameWrapperDiv = document.getElementById("gameWrapper");
     const lobbyMessageDiv = document.getElementById("lobbyMessage");
     const keyDisplayDiv = document.getElementById("keyDisplay");
@@ -417,9 +417,9 @@
     const socketProtocol = location.protocol === "https:" ? "wss" : "ws";
 
     const closeErrors = {
-        4402: "That phrase is already in use by another game. Try a different one.",
-        4403: "Phrase must be at least 5 words.",
-        4404: "No game found with that phrase.",
+        4402: "That code is already in use by another game. Try a different one.",
+        4403: "Code must be exactly 5 letters/numbers.",
+        4404: "No game found with that code.",
         4405: "That game already has two players."
     };
 
@@ -430,7 +430,7 @@
 
     function showLobby() {
         gameWrapperDiv.style.display = "none";
-        lobbyDiv.style.display = "block";
+        pregameWrapperDiv.style.display = "flex";
         keyDisplayDiv.style.display = "none";
         myPlayer = null;
         previousBoard = [];
@@ -462,11 +462,11 @@
                 myPlayer = data.player;
                 playerDiv.innerText = `You are: ${myPlayer}`;
 
-                lobbyDiv.style.display = "none";
+                pregameWrapperDiv.style.display = "none";
                 gameWrapperDiv.style.display = "flex";
 
                 if (data.mode === "private" && data.key) {
-                    keyDisplayDiv.innerText = `Share this phrase with your friend: "${data.key}"`;
+                    keyDisplayDiv.innerText = `Share this code with your friend: "${data.key}"`;
                     keyDisplayDiv.style.display = "block";
                 } else {
                     keyDisplayDiv.style.display = "none";
@@ -491,11 +491,13 @@
         connect(`${socketProtocol}://${location.host}/ws?intent=random`);
     });
 
+    const KEY_PATTERN = /^[A-Za-z0-9]{5}$/;
+
     document.getElementById("createBtn").addEventListener("click", () => {
         const key = document.getElementById("createKey").value.trim();
 
-        if (key.split(/\s+/).filter(Boolean).length < 5) {
-            showLobbyError("Phrase must be at least 5 words.");
+        if (!KEY_PATTERN.test(key)) {
+            showLobbyError("Code must be exactly 5 letters/numbers.");
             return;
         }
 
@@ -505,8 +507,8 @@
     document.getElementById("joinBtn").addEventListener("click", () => {
         const key = document.getElementById("joinKey").value.trim();
 
-        if (!key) {
-            showLobbyError("Enter a phrase to join.");
+        if (!KEY_PATTERN.test(key)) {
+            showLobbyError("Enter the 5-character code your friend gave you.");
             return;
         }
 
