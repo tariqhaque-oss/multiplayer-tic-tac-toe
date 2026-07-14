@@ -118,6 +118,10 @@
         <label for="email">Email</label>
         <input type="email" id="email" name="email" required autofocus>
 
+        <label for="nickname">Display Name</label>
+        <input type="text" id="nickname" name="nickname" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+"
+               title="3-24 characters: letters, numbers, underscore" required>
+
         <label for="password">Password</label>
         <input type="password" id="password" name="password" minlength="8" maxlength="72" required>
 
@@ -139,9 +143,11 @@
     const messageDiv = document.getElementById("message");
     const errors = {
         taken: "That email is already registered.",
+        nickname_taken: "That display name is already taken.",
         mismatch: "Passwords do not match.",
         weak: "Password must be 8-72 characters.",
-        invalid_email: "Please enter a valid email address."
+        invalid_email: "Please enter a valid email address.",
+        invalid_nickname: "Display name must be 3-24 characters: letters, numbers, underscore."
     };
 
     const error = params.get("error");

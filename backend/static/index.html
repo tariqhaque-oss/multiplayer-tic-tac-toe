@@ -143,6 +143,33 @@
             display: none;
         }
 
+        #statsPanel {
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto 20px;
+            background: var(--panel-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 30px;
+        }
+
+        #statsPanel h2 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 20px;
+        }
+
+        #statsPanel select {
+            width: 100%;
+            padding: 8px;
+            font-size: 15px;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
         #board {
             display: grid;
             grid-template-columns: repeat(3, 100px);
@@ -271,6 +298,32 @@
 <body>
 
 <h1>Multiplayer Tic Tac Toe</h1>
+
+<div id="statsPanel">
+    <h2>Your Stats</h2>
+
+    <select id="statsFilter">
+        <option value="overall">All Games</option>
+        <option value="random">Random Games</option>
+    </select>
+
+    <div class="score-row">
+        <span>Games</span>
+        <strong id="statGames">0</strong>
+    </div>
+    <div class="score-row">
+        <span>Wins</span>
+        <strong id="statWins">0</strong>
+    </div>
+    <div class="score-row">
+        <span>Losses</span>
+        <strong id="statLosses">0</strong>
+    </div>
+    <div class="score-row">
+        <span>Draws</span>
+        <strong id="statDraws">0</strong>
+    </div>
+</div>
 
 <div id="lobby">
     <h2>Join Random Game</h2>
@@ -547,6 +600,59 @@
         }
         showLobby();
     }
+
+    let statsData = null;
+
+    function emptyBucket() {
+        return { games: 0, wins: 0, losses: 0, draws: 0 };
+    }
+
+    function renderStats(selection) {
+        let bucket = emptyBucket();
+
+        if (statsData) {
+            if (selection === "overall") {
+                bucket = statsData.overall;
+            } else if (selection === "random") {
+                bucket = statsData.random;
+            } else if (selection.startsWith("opponent:")) {
+                const index = parseInt(selection.split(":")[1], 10);
+                bucket = statsData.opponents[index] || emptyBucket();
+            }
+        }
+
+        document.getElementById("statGames").innerText = bucket.games;
+        document.getElementById("statWins").innerText = bucket.wins;
+        document.getElementById("statLosses").innerText = bucket.losses;
+        document.getElementById("statDraws").innerText = bucket.draws;
+    }
+
+    async function loadStats() {
+        const res = await fetch("/api/stats");
+        if (!res.ok) {
+            return;
+        }
+
+        statsData = await res.json();
+
+        const select = document.getElementById("statsFilter");
+        select.innerHTML = '<option value="overall">All Games</option><option value="random">Random Games</option>';
+
+        statsData.opponents.forEach((opponent, index) => {
+            const option = document.createElement("option");
+            option.value = `opponent:${index}`;
+            option.innerText = opponent.nickname;
+            select.appendChild(option);
+        });
+
+        renderStats("overall");
+    }
+
+    document.getElementById("statsFilter").addEventListener("change", (event) => {
+        renderStats(event.target.value);
+    });
+
+    loadStats();
 </script>
 
 </body>

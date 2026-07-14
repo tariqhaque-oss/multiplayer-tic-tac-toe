@@ -14,7 +14,7 @@ import psycopg2.pool
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
@@ -56,6 +56,7 @@ SESSION_COOKIE = "session"
 SESSION_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+NICKNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,24}$")
 
 GMAIL_SENDER = os.environ.get("GMAIL_SENDER")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
@@ -127,8 +128,8 @@ def is_password_reused(user_id, current_hash, new_password):
     return False
 
 
-def create_session_cookie(email):
-    return serializer.dumps({"email": email})
+def create_session_cookie(user_id, email, nickname):
+    return serializer.dumps({"user_id": user_id, "email": email, "nickname": nickname})
 
 
 def read_session_cookie(token):
@@ -138,10 +139,12 @@ def read_session_cookie(token):
         data = serializer.loads(token, max_age=SESSION_MAX_AGE)
     except (BadSignature, SignatureExpired):
         return None
-    return data.get("email")
+    if "user_id" not in data:
+        return None
+    return data
 
 
-def get_current_user(request: Request):
+def get_session(request: Request):
     return read_session_cookie(request.cookies.get(SESSION_COOKIE))
 
 
@@ -156,11 +159,16 @@ def signup_page():
 
 
 @app.post("/signup")
-def signup(request: Request, email: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
+def signup(request: Request, email: str = Form(...), nickname: str = Form(...),
+           password: str = Form(...), confirm_password: str = Form(...)):
     email = email.strip().lower()
+    nickname = nickname.strip()
 
     if not EMAIL_RE.match(email):
         return RedirectResponse("/signup?error=invalid_email", status_code=303)
+
+    if not NICKNAME_RE.match(nickname):
+        return RedirectResponse("/signup?error=invalid_nickname", status_code=303)
 
     if password != confirm_password:
         return RedirectResponse("/signup?error=mismatch", status_code=303)
@@ -174,10 +182,14 @@ def signup(request: Request, email: str = Form(...), password: str = Form(...), 
     if existing:
         return RedirectResponse("/signup?error=taken", status_code=303)
 
+    existing_nickname = db_execute("SELECT 1 FROM users WHERE LOWER(nickname) = LOWER(%s)", (nickname,), fetch="one")
+    if existing_nickname:
+        return RedirectResponse("/signup?error=nickname_taken", status_code=303)
+
     try:
         row = db_execute(
-            "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id",
-            (email, password_hash),
+            "INSERT INTO users (email, nickname, password_hash) VALUES (%s, %s, %s) RETURNING id",
+            (email, nickname, password_hash),
             fetch="one",
             commit=True,
         )
@@ -253,18 +265,24 @@ def resend_verification(request: Request, email: str = Form(...)):
 @app.post("/login")
 def login(email: str = Form(...), password: str = Form(...)):
     email = email.strip().lower()
-    row = db_execute("SELECT password_hash, email_verified FROM users WHERE email = %s", (email,), fetch="one")
+    row = db_execute(
+        "SELECT id, password_hash, email_verified, nickname FROM users WHERE email = %s",
+        (email,),
+        fetch="one",
+    )
 
-    if not row or len(password.encode("utf-8")) > 72 or not verify_password(password, row[0]):
+    if not row or len(password.encode("utf-8")) > 72 or not verify_password(password, row[1]):
         return RedirectResponse("/login?error=invalid", status_code=303)
 
-    if not row[1]:
+    if not row[2]:
         return RedirectResponse("/login?error=unverified", status_code=303)
+
+    user_id, nickname = row[0], row[3]
 
     redirect = RedirectResponse("/", status_code=303)
     redirect.set_cookie(
         SESSION_COOKIE,
-        create_session_cookie(email),
+        create_session_cookie(user_id, email, nickname),
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
@@ -351,10 +369,73 @@ def reset_password(token: str = Form(...), new_password: str = Form(...), confir
 
 @app.get("/")
 def home(request: Request):
-    email = get_current_user(request)
-    if not email:
+    session = get_session(request)
+    if not session:
         return RedirectResponse("/login")
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+
+@app.get("/api/stats")
+def get_stats(request: Request):
+    session = get_session(request)
+    if not session:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    user_id = session["user_id"]
+
+    rows = db_execute(
+        """
+        SELECT mode, winner,
+               CASE WHEN player_x_id = %s THEN 'X' ELSE 'O' END AS my_symbol,
+               CASE WHEN player_x_id = %s THEN player_o_id ELSE player_x_id END AS opponent_id
+        FROM game_results
+        WHERE player_x_id = %s OR player_o_id = %s
+        """,
+        (user_id, user_id, user_id, user_id),
+        fetch="all",
+    )
+
+    opponent_ids = sorted({opponent_id for (_, _, _, opponent_id) in rows})
+    nickname_map = {}
+    if opponent_ids:
+        nickname_rows = db_execute(
+            "SELECT id, nickname FROM users WHERE id = ANY(%s)",
+            (opponent_ids,),
+            fetch="all",
+        )
+        nickname_map = {row_id: nickname for row_id, nickname in nickname_rows}
+
+    def empty_bucket():
+        return {"games": 0, "wins": 0, "losses": 0, "draws": 0}
+
+    def tally(bucket, winner, my_symbol):
+        bucket["games"] += 1
+        if winner == my_symbol:
+            bucket["wins"] += 1
+        elif winner == "Draw":
+            bucket["draws"] += 1
+        else:
+            bucket["losses"] += 1
+
+    overall = empty_bucket()
+    random_bucket = empty_bucket()
+    opponents = {}
+
+    for mode, winner, my_symbol, opponent_id in rows:
+        tally(overall, winner, my_symbol)
+
+        if mode == "random":
+            tally(random_bucket, winner, my_symbol)
+        else:
+            nickname = nickname_map.get(opponent_id, "Unknown")
+            bucket = opponents.setdefault(nickname, empty_bucket())
+            tally(bucket, winner, my_symbol)
+
+    return JSONResponse({
+        "overall": overall,
+        "random": random_bucket,
+        "opponents": [{"nickname": nickname, **bucket} for nickname, bucket in sorted(opponents.items())],
+    })
 
 
 winning_combinations = [
@@ -439,12 +520,13 @@ async def reject(websocket, code):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, intent: str = "random", key: str = ""):
-    email = read_session_cookie(websocket.cookies.get(SESSION_COOKIE))
-    if not email:
+    session = read_session_cookie(websocket.cookies.get(SESSION_COOKIE))
+    if not session:
         await reject(websocket, 4401)
         return
 
-    display_name = email.split("@")[0]
+    user_id = session["user_id"]
+    display_name = session["nickname"]
     key = key.strip()[:MAX_KEY_LENGTH]
 
     if intent == "create":
@@ -472,7 +554,7 @@ async def websocket_endpoint(websocket: WebSocket, intent: str = "random", key: 
 
     symbols_in_use = {c["symbol"] for c in game["connections"].values()}
     player_symbol = "X" if "X" not in symbols_in_use else "O"
-    game["connections"][websocket] = {"symbol": player_symbol, "display_name": display_name}
+    game["connections"][websocket] = {"symbol": player_symbol, "display_name": display_name, "user_id": user_id}
 
     await websocket.accept()
 
@@ -509,6 +591,15 @@ async def websocket_endpoint(websocket: WebSocket, intent: str = "random", key: 
 
                 if winner:
                     game["scores"][winner] += 1
+
+                    x_id = next(c["user_id"] for c in game["connections"].values() if c["symbol"] == "X")
+                    o_id = next(c["user_id"] for c in game["connections"].values() if c["symbol"] == "O")
+                    db_execute(
+                        "INSERT INTO game_results (mode, player_x_id, player_o_id, winner) VALUES (%s, %s, %s, %s)",
+                        (game["mode"], x_id, o_id, winner),
+                        commit=True,
+                    )
+
                     await broadcast(game, f"{winner} wins this round!")
 
                     reset_round(game)
