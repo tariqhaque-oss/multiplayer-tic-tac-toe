@@ -3,59 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Multiplayer Tic Tac Toe</title>
+    <title>Tic Tac Toe - GameHub</title>
+    <link rel="stylesheet" href="/static/style.css">
 
     <style>
         :root {
-            --bg: #f4f4f4;
-            --panel-bg: #ffffff;
-            --text: #111111;
-            --border: #222222;
             --cell-bg: #ffffff;
-            --cell-border: #000000;
-            --cell-hover: #eaeaea;
+            --cell-border: #cbd5e1;
+            --cell-hover: #f1f5f9;
             --x-color: #2563eb;
             --o-color: #dc2626;
             --win-bg: #fde68a;
-            --accent: #16a34a;
-            --error: #dc2626;
-            --input-bg: #ffffff;
-            --input-border: #999999;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg: #121212;
-                --panel-bg: #1e1e1e;
-                --text: #f0f0f0;
-                --border: #444444;
-                --cell-bg: #1e1e1e;
-                --cell-border: #666666;
-                --cell-hover: #2a2a2a;
+                --cell-bg: #10192b;
+                --cell-border: #3a4a63;
+                --cell-hover: #1f2c42;
                 --x-color: #60a5fa;
                 --o-color: #f87171;
                 --win-bg: #78350f;
-                --accent: #4ade80;
-                --error: #f87171;
-                --input-bg: #2a2a2a;
-                --input-border: #666666;
             }
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 40px 20px;
-            background: var(--bg);
-            color: var(--text);
-        }
-
-        h1 {
-            text-align: center;
         }
 
         .layout {
@@ -74,8 +43,9 @@
             width: 100%;
             max-width: 360px;
             background: var(--panel-bg);
-            border: 2px solid var(--border);
-            border-radius: 8px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 1px 3px var(--shadow);
             padding: 30px;
         }
 
@@ -104,22 +74,11 @@
             background: var(--input-bg);
             color: var(--text);
             border: 1px solid var(--input-border);
-            border-radius: 4px;
+            border-radius: 8px;
         }
 
         #lobby button {
             width: 100%;
-            padding: 12px;
-            margin-top: 10px;
-        }
-
-        #randomBtn {
-            background: var(--accent);
-            color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
         }
 
         .lobby-message {
@@ -146,9 +105,10 @@
             width: 100%;
             max-width: 360px;
             background: var(--panel-bg);
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            padding: 20px 30px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 1px 3px var(--shadow);
+            padding: 24px 30px;
         }
 
         #statsPanel h2 {
@@ -164,7 +124,7 @@
             background: var(--input-bg);
             color: var(--text);
             border: 1px solid var(--input-border);
-            border-radius: 4px;
+            border-radius: 8px;
             margin-bottom: 10px;
         }
 
@@ -201,7 +161,7 @@
         }
 
         .cell:focus-visible {
-            outline: 3px solid var(--accent);
+            outline: 3px solid var(--brand);
             outline-offset: -3px;
         }
 
@@ -235,9 +195,10 @@
         .scorecard {
             width: 220px;
             background: var(--panel-bg);
-            border: 2px solid var(--border);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px var(--shadow);
             padding: 20px;
-            border-radius: 8px;
+            border-radius: 14px;
         }
 
         .scorecard h2 {
@@ -272,13 +233,6 @@
             }
         }
 
-        button {
-            padding: 10px 20px;
-            margin-top: 15px;
-            cursor: pointer;
-            font-family: inherit;
-        }
-
         @media (max-width: 480px) {
             #board {
                 grid-template-columns: repeat(3, 28vw);
@@ -295,7 +249,13 @@
 
 <body>
 
-<h1>Multiplayer Tic Tac Toe</h1>
+<div class="brand-header">
+    <div class="brand-mark">
+        <span class="logo">⭕❌</span>
+        Tic Tac Toe
+    </div>
+    <a href="/games"><button type="button" class="btn-secondary" style="width:auto; margin:0;">← Back to Games</button></a>
+</div>
 
 <div class="layout" id="pregameWrapper">
     <div id="statsPanel">
@@ -325,22 +285,33 @@
     </div>
 
     <div id="lobby">
+        <h2>Play vs Bot</h2>
+        <label for="botDifficulty">Difficulty</label>
+        <select id="botDifficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+        </select>
+        <button id="botBtn" type="button" class="btn-primary">Play vs Bot</button>
+
+        <hr>
+
         <h2>Join Random Game</h2>
-        <button id="randomBtn" type="button">Join Random Game</button>
+        <button id="randomBtn" type="button" class="btn-primary">Join Random Game</button>
 
         <hr>
 
         <h2>Create a Private Game</h2>
         <label for="createKey">Secret code (5 letters/numbers, share with your friend)</label>
         <input type="text" id="createKey" maxlength="5" placeholder="e.g. A3F9K">
-        <button type="button" id="createBtn">Create Game</button>
+        <button type="button" id="createBtn" class="btn-primary">Create Game</button>
 
         <hr>
 
         <h2>Join a Private Game</h2>
         <label for="joinKey">Enter the code your friend gave you</label>
         <input type="text" id="joinKey" maxlength="5" placeholder="Enter the shared code">
-        <button type="button" id="joinBtn">Join Game</button>
+        <button type="button" id="joinBtn" class="btn-primary">Join Game</button>
 
         <div id="lobbyMessage" class="lobby-message"></div>
     </div>
@@ -354,9 +325,9 @@
         <div id="message"></div>
         <div id="board"></div>
 
-        <button onclick="resetGame()">Reset Match</button>
-        <button type="button" onclick="leaveGame()">Leave Game</button>
-        <a href="/logout"><button type="button">Log Out</button></a>
+        <button onclick="resetGame()" class="btn-primary">Reset Match</button>
+        <button type="button" onclick="leaveGame()" class="btn-secondary">Leave Game</button>
+        <a href="/logout"><button type="button" class="btn-secondary">Log Out</button></a>
     </div>
 
     <div class="scorecard">
@@ -420,7 +391,8 @@
         4402: "That code is already in use by another game. Try a different one.",
         4403: "Code must be exactly 5 letters/numbers.",
         4404: "No game found with that code.",
-        4405: "That game already has two players."
+        4405: "That game already has two players.",
+        4406: "Invalid bot difficulty."
     };
 
     function showLobbyError(text) {
@@ -468,6 +440,10 @@
                 if (data.mode === "private" && data.key) {
                     keyDisplayDiv.innerText = `Share this code with your friend: "${data.key}"`;
                     keyDisplayDiv.style.display = "block";
+                } else if (data.mode === "bot" && data.difficulty) {
+                    const label = data.difficulty.charAt(0).toUpperCase() + data.difficulty.slice(1);
+                    keyDisplayDiv.innerText = `Playing vs Bot (${label})`;
+                    keyDisplayDiv.style.display = "block";
                 } else {
                     keyDisplayDiv.style.display = "none";
                 }
@@ -486,6 +462,11 @@
             }
         };
     }
+
+    document.getElementById("botBtn").addEventListener("click", () => {
+        const difficulty = document.getElementById("botDifficulty").value;
+        connect(`${socketProtocol}://${location.host}/ws?intent=bot&difficulty=${difficulty}`);
+    });
 
     document.getElementById("randomBtn").addEventListener("click", () => {
         connect(`${socketProtocol}://${location.host}/ws?intent=random`);

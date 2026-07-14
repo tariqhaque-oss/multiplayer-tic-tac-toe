@@ -3,138 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign Up - Tic Tac Toe</title>
-
-    <style>
-        :root {
-            --bg: #f4f4f4;
-            --panel-bg: #ffffff;
-            --text: #111111;
-            --border: #222222;
-            --accent: #16a34a;
-            --error: #dc2626;
-            --input-bg: #ffffff;
-            --input-border: #999999;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #121212;
-                --panel-bg: #1e1e1e;
-                --text: #f0f0f0;
-                --border: #444444;
-                --accent: #4ade80;
-                --error: #f87171;
-                --input-bg: #2a2a2a;
-                --input-border: #666666;
-            }
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 40px 20px;
-            background: var(--bg);
-            color: var(--text);
-            display: flex;
-            justify-content: center;
-        }
-
-        .panel {
-            width: 100%;
-            max-width: 340px;
-            background: var(--panel-bg);
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            padding: 30px;
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 24px;
-            margin-top: 0;
-        }
-
-        label {
-            display: block;
-            margin: 15px 0 5px;
-            font-size: 14px;
-        }
-
-        input {
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            background: var(--input-bg);
-            color: var(--text);
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-        }
-
-        button {
-            width: 100%;
-            padding: 12px;
-            margin-top: 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            background: var(--accent);
-            color: #ffffff;
-        }
-
-        .message {
-            margin-top: 15px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .message.error {
-            color: var(--error);
-        }
-
-        .footer-link {
-            margin-top: 20px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        a {
-            color: var(--accent);
-        }
-    </style>
+    <title>Sign Up - GameHub</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
-<body>
+<body class="auth-page">
 
-<div class="panel">
-    <h1>Sign Up</h1>
+<div>
+    <div class="auth-logo">🎮 GameHub</div>
 
-    <form method="post" action="/signup">
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" required autofocus>
+    <div class="panel">
+        <h1>Create your account</h1>
+        <p class="subtitle">Join and start playing with friends</p>
 
-        <label for="nickname">Display Name</label>
-        <input type="text" id="nickname" name="nickname" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+"
-               title="3-24 characters: letters, numbers, underscore" required>
+        <form method="post" action="/signup">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required autofocus>
 
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" minlength="8" maxlength="72" required>
+            <label for="nickname">Display Name</label>
+            <input type="text" id="nickname" name="nickname" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+"
+                   title="3-24 characters: letters, numbers, underscore" required>
 
-        <label for="confirm_password">Confirm Password</label>
-        <input type="password" id="confirm_password" name="confirm_password" minlength="8" maxlength="72" required>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" minlength="8" maxlength="72" required>
 
-        <button type="submit">Create Account</button>
-    </form>
+            <label for="confirm_password">Confirm Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" minlength="8" maxlength="72" required>
 
-    <div id="message" class="message"></div>
+            <button type="submit" class="btn-primary">Create Account</button>
+        </form>
 
-    <div class="footer-link">
-        Already have an account? <a href="/login">Log in</a>
+        <div id="message" class="message"></div>
+
+        <div class="footer-link">
+            Already have an account? <a href="/login">Log in</a>
+        </div>
     </div>
 </div>
 
