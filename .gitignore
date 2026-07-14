@@ -1,5 +1,9 @@
 # Secrets - never commit
 backend/.env
+infra/.env
+
+# Runtime logs
+infra/ddns_update.log
 
 # Local Postgres cluster data (binary, machine-specific)
 backend/pgdata/
