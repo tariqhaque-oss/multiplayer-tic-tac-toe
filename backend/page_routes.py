@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
-from config import STATIC_DIR
+from config import PAGES_DIR
 from security import get_session
 
 router = APIRouter()
@@ -22,7 +22,7 @@ def games_hub(request: Request):
     session = get_session(request)
     if not session:
         return RedirectResponse("/login")
-    return FileResponse(os.path.join(STATIC_DIR, "games.html"))
+    return FileResponse(os.path.join(PAGES_DIR, "games.html"))
 
 
 @router.get("/games/tic-tac-toe")
@@ -30,4 +30,4 @@ def tic_tac_toe_page(request: Request):
     session = get_session(request)
     if not session:
         return RedirectResponse("/login")
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(os.path.join(PAGES_DIR, "index.html"))

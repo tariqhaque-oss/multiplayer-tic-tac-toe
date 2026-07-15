@@ -24,6 +24,9 @@ A real-time multiplayer game platform with email-based accounts, starting with T
 
 ## Project structure
 
+Backend and frontend are fully separate top-level directories - the backend
+serves the frontend's files, but doesn't contain them.
+
 ```
 .
 ├── backend/
@@ -42,19 +45,31 @@ A real-time multiplayer game platform with email-based accounts, starting with T
 │   │   ├── 002_email_auth.sql
 │   │   ├── 003_nicknames_history_and_stats.sql
 │   │   └── 004_bot_accounts.sql
-│   ├── .env.example                Template for required environment variables
-│   └── static/
-│       ├── style.css                   Shared design system (colors, buttons, panels, dark mode)
-│       ├── games.html                  Game-selection hub (post-login landing page)
-│       ├── index.html                  Tic-tac-toe lobby + board
-│       ├── login.html
-│       ├── signup.html
-│       ├── forgot-password.html
-│       └── reset-password.html
+│   └── .env.example                Template for required environment variables
+├── frontend/
+│   ├── pages/                      Full HTML documents - each served by a gated backend route (session-checked, not directly downloadable)
+│   │   ├── games.html                  Game-selection hub (post-login landing page)
+│   │   ├── index.html                  Tic-tac-toe lobby + board
+│   │   ├── login.html
+│   │   ├── signup.html
+│   │   ├── forgot-password.html
+│   │   └── reset-password.html
+│   └── static/                     Mounted at /static - assets only, no page markup
+│       ├── css/
+│       │   ├── style.css               Shared design system (colors, buttons, panels, dark mode)
+│       │   ├── login.css                Page-specific overrides
+│       │   ├── games.css
+│       │   └── tic-tac-toe.css
+│       └── js/
+│           ├── login.js
+│           ├── signup.js
+│           ├── reset-password.js
+│           └── tic-tac-toe.js          WebSocket client, board rendering, stats panel
 ├── infra/
 │   ├── Caddyfile             Reverse proxy config (automatic Let's Encrypt HTTPS)
 │   ├── ddns_update.py         Keeps a Cloudflare DNS A record pointed at this machine's current public IP
 │   └── .env.example           Template for Cloudflare API credentials
+├── deploy.py             Windows helper: status/start/stop/restart for Postgres, uvicorn, and Caddy
 ├── deployment guide.txt
 └── .gitignore
 ```

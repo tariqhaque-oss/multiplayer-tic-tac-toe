@@ -1,0 +1,8 @@
+#resendForm {
+    display: none;
+    margin-top: 16px;
+}
+
+#resendForm button {
+    margin-top: 8px;
+}

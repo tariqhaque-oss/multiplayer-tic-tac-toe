@@ -4,7 +4,7 @@ import psycopg2.errors
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import FileResponse, RedirectResponse
 
-from config import STATIC_DIR, EMAIL_RE, NICKNAME_RE, SESSION_COOKIE, SESSION_MAX_AGE
+from config import PAGES_DIR, EMAIL_RE, NICKNAME_RE, SESSION_COOKIE, SESSION_MAX_AGE
 from db import db_execute
 from security import hash_password, verify_password, generate_token, hash_token, create_session_cookie
 from email_utils import send_email, build_base_url
@@ -30,12 +30,12 @@ def is_password_reused(user_id, current_hash, new_password):
 
 @router.get("/login")
 def login_page():
-    return FileResponse(os.path.join(STATIC_DIR, "login.html"))
+    return FileResponse(os.path.join(PAGES_DIR, "login.html"))
 
 
 @router.get("/signup")
 def signup_page():
-    return FileResponse(os.path.join(STATIC_DIR, "signup.html"))
+    return FileResponse(os.path.join(PAGES_DIR, "signup.html"))
 
 
 @router.post("/signup")
@@ -179,7 +179,7 @@ def logout():
 
 @router.get("/forgot-password")
 def forgot_password_page():
-    return FileResponse(os.path.join(STATIC_DIR, "forgot-password.html"))
+    return FileResponse(os.path.join(PAGES_DIR, "forgot-password.html"))
 
 
 @router.post("/forgot-password")
@@ -210,7 +210,7 @@ def forgot_password(request: Request, email: str = Form(...)):
 
 @router.get("/reset-password")
 def reset_password_page():
-    return FileResponse(os.path.join(STATIC_DIR, "reset-password.html"))
+    return FileResponse(os.path.join(PAGES_DIR, "reset-password.html"))
 
 
 @router.post("/reset-password")

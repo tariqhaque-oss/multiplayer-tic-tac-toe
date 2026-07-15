@@ -1,0 +1,88 @@
+.hub-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.hub-heading {
+    margin-bottom: 28px;
+}
+
+.hub-heading h1 {
+    margin: 0 0 6px;
+    font-size: 26px;
+}
+
+.hub-heading p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 15px;
+}
+
+.game-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+}
+
+.game-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px var(--shadow);
+    padding: 24px;
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+a.game-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px -8px var(--shadow);
+    text-decoration: none;
+}
+
+.game-card .icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+}
+
+.game-card h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+}
+
+.game-card p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-muted);
+    flex-grow: 1;
+}
+
+.game-card .play-label {
+    margin-top: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brand);
+}
+
+.game-card.disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    width: fit-content;
+}

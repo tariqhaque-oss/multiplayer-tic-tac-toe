@@ -1,0 +1,237 @@
+:root {
+    --cell-bg: #ffffff;
+    --cell-border: #cbd5e1;
+    --cell-hover: #f1f5f9;
+    --x-color: #2563eb;
+    --o-color: #dc2626;
+    --win-bg: #fde68a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --cell-bg: #10192b;
+        --cell-border: #3a4a63;
+        --cell-hover: #1f2c42;
+        --x-color: #60a5fa;
+        --o-color: #f87171;
+        --win-bg: #78350f;
+    }
+}
+
+.layout {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 40px;
+}
+
+.game-area {
+    text-align: center;
+}
+
+#lobby {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px var(--shadow);
+    padding: 30px;
+}
+
+#lobby h2 {
+    margin-top: 0;
+    text-align: center;
+    font-size: 20px;
+}
+
+#lobby hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 25px 0;
+}
+
+#lobby label {
+    display: block;
+    margin: 10px 0 5px;
+    font-size: 14px;
+}
+
+#lobby input {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+}
+
+#lobby button {
+    width: 100%;
+}
+
+.lobby-message {
+    margin-top: 15px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.lobby-message.error {
+    color: var(--error);
+}
+
+#keyDisplay {
+    font-size: 15px;
+    margin: 10px 0;
+    padding: 10px;
+    background: var(--input-bg);
+    border: 1px dashed var(--input-border);
+    border-radius: 4px;
+    display: none;
+}
+
+#statsPanel {
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px var(--shadow);
+    padding: 24px 30px;
+}
+
+#statsPanel h2 {
+    margin-top: 0;
+    text-align: center;
+    font-size: 20px;
+}
+
+#statsPanel select {
+    width: 100%;
+    padding: 8px;
+    font-size: 15px;
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    gap: 5px;
+    justify-content: center;
+}
+
+.cell {
+    width: 100px;
+    height: 100px;
+    font-size: 40px;
+    font-family: inherit;
+    font-weight: bold;
+    border: 2px solid var(--cell-border);
+    background: var(--cell-bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.cell:hover:not(:disabled) {
+    background: var(--cell-hover);
+}
+
+.cell:disabled {
+    cursor: not-allowed;
+}
+
+.cell:focus-visible {
+    outline: 3px solid var(--brand);
+    outline-offset: -3px;
+}
+
+.cell[data-value="X"] {
+    color: var(--x-color);
+}
+
+.cell[data-value="O"] {
+    color: var(--o-color);
+}
+
+.cell.win {
+    background: var(--win-bg);
+}
+
+.cell.mark-in {
+    animation: mark-in 0.15s ease-out;
+}
+
+@keyframes mark-in {
+    from {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.scorecard {
+    width: 220px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px var(--shadow);
+    padding: 20px;
+    border-radius: 14px;
+}
+
+.scorecard h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+.score-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 20px;
+    margin: 12px 0;
+}
+
+#status, #player, #message {
+    margin: 15px;
+    font-size: 20px;
+    min-height: 28px;
+}
+
+#status.your-turn {
+    animation: pulse 1.2s ease-in-out infinite;
+    font-weight: bold;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@media (max-width: 480px) {
+    #board {
+        grid-template-columns: repeat(3, 28vw);
+    }
+
+    .cell {
+        width: 28vw;
+        height: 28vw;
+        font-size: 10vw;
+    }
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Choose a Game - GameHub</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/games.css">
+</head>
+
+<body>
+
+<div class="brand-header">
+    <div class="brand-mark">
+        <span class="logo">🎮</span>
+        GameHub
+    </div>
+    <a href="/logout"><button type="button" class="btn-secondary" style="width:auto; margin:0;">Log Out</button></a>
+</div>
+
+<div class="hub-wrap">
+    <div class="hub-heading">
+        <h1>Choose a game</h1>
+        <p>Pick a game below to see your stats and start playing.</p>
+    </div>
+
+    <div class="game-grid">
+        <a class="game-card" href="/games/tic-tac-toe">
+            <div class="icon">⭕❌</div>
+            <h2>Tic Tac Toe</h2>
+            <p>Classic 2-player game. Play a random opponent or invite a friend with a private code.</p>
+            <div class="play-label">Play →</div>
+        </a>
+
+        <div class="game-card disabled">
+            <div class="badge">Coming soon</div>
+            <div class="icon">🔴🟡</div>
+            <h2>Connect Four</h2>
+            <p>Drop discs and connect four in a row. Coming in a future update.</p>
+        </div>
+
+        <div class="game-card disabled">
+            <div class="badge">Coming soon</div>
+            <div class="icon">✊✋✌️</div>
+            <h2>Rock Paper Scissors</h2>
+            <p>Quick best-of rounds against a friend. Coming in a future update.</p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
