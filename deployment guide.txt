@@ -273,3 +273,148 @@ stable cloud endpoint, and move secrets out of plaintext .env files. The
 one thing that WOULD force a code change is horizontal scaling of the
 game/WebSocket layer (3d) - not needed until/unless a single instance
 stops being enough.
+
+
+====================================================================
+4. CHECKING WHAT'S RUNNING, MANUALLY (Command Prompt / cmd.exe)
+====================================================================
+
+The three pieces of this stack (Postgres, uvicorn, Caddy) each listen on
+a fixed port, so the reliable way to check "is X running" is to check
+whether something is listening on its port, then look up which process
+that is. These commands work from any folder in Command Prompt (cmd.exe)
+- no cd needed - but for consistency, open cmd.exe and start at the repo
+root:
+
+    cd /d C:\Users\thaque2050\Desktop\tic-tac-toe
+
+Check each port (one command per service). The trailing space inside the
+quotes matters - without it, ":80" would also match ":8000":
+
+    netstat -ano | findstr ":5433 "     (postgres)
+    netstat -ano | findstr ":8000 "     (uvicorn)
+    netstat -ano | findstr ":80 "       (caddy, plain HTTP)
+    netstat -ano | findstr ":443 "      (caddy, HTTPS)
+
+Example output:
+    TCP    0.0.0.0:8000    0.0.0.0:0    LISTENING    18948
+
+The last column (18948 here) is the PID. If a command prints nothing,
+that service isn't running.
+
+To see what process a PID actually belongs to (confirms it's really
+python.exe / caddy.exe / postgres.exe and not something else that
+happens to be on that port):
+
+    tasklist /FI "PID eq 18948"
+
+To instead search by process name directly, without going through ports:
+
+    tasklist | findstr /I "python"      (matches uvicorn - it runs as python.exe)
+    tasklist | findstr /I "caddy"
+    tasklist | findstr /I "postgres"    (a running Postgres cluster shows several postgres.exe processes - one postmaster + helper processes)
+
+Same checks from PowerShell, if that's open instead of cmd.exe:
+
+    Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 5433,8000,80,443 } | Select-Object LocalPort,OwningProcess
+    Get-Process caddy,python,postgres -ErrorAction SilentlyContinue
+
+
+====================================================================
+5. KILLING PROCESSES MANUALLY (Command Prompt / cmd.exe)
+====================================================================
+
+Preferred (graceful) shutdown - always do this for Postgres, never
+taskkill it directly, to avoid corrupting backend/pgdata:
+
+    cd /d C:\Users\thaque2050\Desktop\tic-tac-toe\backend
+    "C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata stop
+
+uvicorn and Caddy don't need graceful shutdown - taskkill is fine. First
+find the PID with the netstat commands from section 4, then:
+
+    taskkill /PID <pid> /F
+
+For example, if `netstat -ano | findstr ":8000 "` showed PID 18948:
+
+    taskkill /PID 18948 /F
+
+Caddy listens on both 80 and 443 as the SAME process/PID - killing it via
+either port's PID stops both.
+
+Killing by process name instead of PID (faster, but broader - this kills
+EVERY process with that image name, so only use /IM when you're sure
+nothing else on the machine shares that name):
+
+    taskkill /IM caddy.exe /F
+
+Do NOT run `taskkill /IM python.exe /F` casually - it kills every running
+Python process on the machine, not just uvicorn. Find uvicorn's specific
+PID via netstat instead (section 4) and kill that PID.
+
+
+====================================================================
+6. MANUAL DEPLOYMENT VIA COMMAND PROMPT (cmd.exe), STEP BY STEP
+====================================================================
+
+This is the same sequence as section 2, written out explicitly for
+cmd.exe with the exact folder to cd into before each command. Open three
+separate Command Prompt windows.
+
+Window 1 - database (skip if section 4 already shows something on 5433):
+
+    cd /d C:\Users\thaque2050\Desktop\tic-tac-toe\backend
+    "C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D pgdata -l pglog.txt start
+
+Window 2 - app server (skip if section 4 already shows something on 8000):
+
+    cd /d C:\Users\thaque2050\Desktop\tic-tac-toe\backend
+    python -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+Leave this window open - closing it (or Ctrl+C) stops the app server.
+
+Window 3 - reverse proxy / public HTTPS (only needed for the
+https://alaab.ai public URL; skip for local-only/LAN play):
+
+    cd /d C:\Users\thaque2050\Desktop\tic-tac-toe\infra
+    "%LOCALAPPDATA%\Microsoft\WinGet\Links\caddy.exe" run --config Caddyfile
+
+Leave this window open too - closing it drops the public site (local
+http://localhost:8000 keeps working either way).
+
+Verify (any window, any folder):
+
+    curl -s -o NUL -w "%%{http_code}\n" http://localhost:8000/login
+    curl -s -o NUL -w "%%{http_code}\n" https://alaab.ai/login
+
+(Note: in cmd.exe the % in curl's -w format needs doubling as %% as shown
+above; in PowerShell or Git Bash, use a single % instead.)
+
+
+====================================================================
+7. DEPLOYING VIA THE PYTHON SCRIPT (deploy.py)
+====================================================================
+
+deploy.py at the repo root automates everything in sections 5 and 6 -
+it checks each service's port the same way section 4 does by hand, then
+starts/stops whichever of Postgres/uvicorn/Caddy needs it. It does not
+touch backend/.env or infra/.env - those still need to be filled in once,
+per section 2.
+
+    cd /d C:\Users\thaque2050\Desktop\tic-tac-toe
+    python deploy.py status      (prints each service + port + running/stopped + PID)
+    python deploy.py start       (starts whichever of the three isn't already running)
+    python deploy.py stop        (stops all three - Postgres gracefully via pg_ctl, the rest via taskkill)
+    python deploy.py restart     (stop, then start)
+
+`start` launches uvicorn and Caddy as detached background processes (logs
+go to backend/uvicorn.log and infra/caddy.log respectively) and returns -
+it does not block the Command Prompt window, so you can close that window
+immediately after and the app keeps running, same as the "leave the
+window open" caveat in section 6 does NOT apply here.
+
+This script is Windows-specific (uses netstat/taskkill and the exact
+pg_ctl.exe/caddy.exe paths from this machine's setup) - it is a
+convenience wrapper around section 6, not a substitute for understanding
+it. If it ever behaves unexpectedly, fall back to the manual commands in
+sections 4-6 to see what's actually happening.
