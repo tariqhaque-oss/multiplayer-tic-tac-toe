@@ -1,6 +1,6 @@
 # GameHub (Multiplayer Tic Tac Toe)
 
-A real-time multiplayer game platform with email-based accounts, starting with Tic Tac Toe. Built with FastAPI (WebSockets) on the backend and plain HTML/CSS/vanilla JS on the frontend - no frontend framework or build step.
+A real-time multiplayer game platform with email-based accounts, starting with Tic Tac Toe. Built with FastAPI (WebSockets) on the backend and plain HTML/CSS/vanilla JS on the frontend - no frontend framework or build step. Backend and frontend are two independently deployable services: the backend is a pure JSON + WebSocket API (no HTML), and the frontend is fully static files that call it - see "Architecture" below.
 
 ## Features
 
@@ -16,16 +16,39 @@ A real-time multiplayer game platform with email-based accounts, starting with T
 
 ## Stack
 
-- **Backend**: FastAPI + WebSockets, Python
+- **Backend**: FastAPI + WebSockets, Python - a pure JSON/WebSocket API. Serves no HTML or static assets.
 - **Database**: PostgreSQL (accounts, password history, email verification/reset tokens, game results)
 - **Email**: Gmail SMTP (via an App Password)
-- **Frontend**: Raw HTML/CSS/vanilla JS served as static files - no framework, no build step
+- **Frontend**: Raw HTML/CSS/vanilla JS, fully static files - no framework, no build step. Talks to the backend exclusively via `fetch()` (`/api/...`) and WebSocket (`/ws`).
+- **Reverse proxy** (`infra/Caddyfile`): sits in front of both. Routes `/api/*` and `/ws` to the backend process; serves everything else as static files straight from `frontend/`. This keeps browser requests same-origin (no CORS, no cross-site cookies needed) while backend and frontend remain two separate processes you can run, restart, or eventually host independently.
 - **Deployment tooling** (`infra/`): Caddy (reverse proxy + automatic HTTPS) and a Cloudflare Dynamic DNS updater, for running this from a home server behind a normal residential IP
+
+## Architecture
+
+```
+Browser
+  |
+  |  https://alaab.ai/...          (one origin, no CORS)
+  v
+Caddy  (infra/Caddyfile)
+  |-- /api/*, /ws  -->  backend (uvicorn, :8000)   JSON + WebSocket only
+  `-- everything else -->  frontend/  (static files, file_server)
+```
+
+The backend has no idea the frontend exists (no HTML responses, no page
+routes, no session-gated redirects) - it just checks the session cookie on
+each request via `security.get_session()`. The frontend has no idea the
+backend is Python (no page ever waits on a server-side redirect) - each
+protected page (`games.html`, `index.html`) calls `GET /api/auth/me` on
+load via `frontend/static/js/auth-guard.js` and redirects to `/login.html`
+client-side if unauthenticated. Auth forms (`login.html`, `signup.html`,
+etc.) submit via `fetch()` to `/api/auth/...` and branch on the JSON
+response instead of a server-side redirect.
 
 ## Project structure
 
-Backend and frontend are fully separate top-level directories - the backend
-serves the frontend's files, but doesn't contain them.
+Backend and frontend are fully separate top-level directories with no
+shared files - the backend never reads from or serves `frontend/`.
 
 ```
 .
@@ -35,9 +58,8 @@ serves the frontend's files, but doesn't contain them.
 │   ├── db.py                 Postgres connection pool + query helper
 │   ├── security.py            Password hashing, tokens, session cookies
 │   ├── email_utils.py          Gmail SMTP sending, base-URL helper
-│   ├── auth_routes.py           Signup, login, logout, email verification, password reset
-│   ├── page_routes.py            Home / games hub / tic-tac-toe page routes
-│   ├── stats_routes.py            /api/stats
+│   ├── auth_routes.py           JSON API under /api/auth: signup, login, logout, /me, email verification, password reset
+│   ├── stats_routes.py           /api/stats
 │   ├── game.py                     Tic-tac-toe engine, bot AI (minimax), and the /ws WebSocket handler
 │   ├── requirements.txt
 │   ├── migrations/                 Numbered SQL migrations, applied in order
@@ -47,7 +69,7 @@ serves the frontend's files, but doesn't contain them.
 │   │   └── 004_bot_accounts.sql
 │   └── .env.example                Template for required environment variables
 ├── frontend/
-│   ├── pages/                      Full HTML documents - each served by a gated backend route (session-checked, not directly downloadable)
+│   ├── pages/                      Full HTML documents - static files, no backend involvement to serve them
 │   │   ├── games.html                  Game-selection hub (post-login landing page)
 │   │   ├── index.html                  Tic-tac-toe lobby + board
 │   │   ├── login.html
@@ -61,12 +83,14 @@ serves the frontend's files, but doesn't contain them.
 │       │   ├── games.css
 │       │   └── tic-tac-toe.css
 │       └── js/
+│           ├── auth-guard.js           Shared: requireAuth() page gate + logout(), used by games.html/index.html
 │           ├── login.js
 │           ├── signup.js
+│           ├── forgot-password.js
 │           ├── reset-password.js
 │           └── tic-tac-toe.js          WebSocket client, board rendering, stats panel
 ├── infra/
-│   ├── Caddyfile             Reverse proxy config (automatic Let's Encrypt HTTPS)
+│   ├── Caddyfile             Path-routes /api/* and /ws to the backend; serves frontend/ as static files for everything else
 │   ├── ddns_update.py         Keeps a Cloudflare DNS A record pointed at this machine's current public IP
 │   └── .env.example           Template for Cloudflare API credentials
 ├── deploy.py             Windows helper: status/start/stop/restart for Postgres, uvicorn, and Caddy
@@ -93,14 +117,21 @@ serves the frontend's files, but doesn't contain them.
    cd backend
    python -m pip install -r requirements.txt
    ```
-5. Run the server:
+5. Run the backend API:
    ```
    python -m uvicorn main:app --host 0.0.0.0 --port 8000
    ```
-6. Open `http://localhost:8000/signup` to create an account.
+6. Run Caddy (from `infra/`) so the frontend is actually served and routed to the API - the backend alone returns no HTML:
+   ```
+   cd infra
+   caddy run --config Caddyfile
+   ```
+7. Open `http://localhost:8080/signup.html` to create an account (`:8080` is the plain-HTTP local site block in `infra/Caddyfile` - `alaab.ai` is the public one and needs its own DNS/TLS).
+
+`deploy.py` at the repo root automates steps 5-6 (and Postgres) - see "deployment guide.txt".
 
 ## Playing over the internet
 
-**Quick/casual**: expose port 8000 with a tunnel (e.g. `ngrok http 8000`) and share the resulting HTTPS URL. Each person signs up/logs in with their own email, then picks a game from the hub.
+**Self-hosted on a real domain**: see `infra/` - `Caddyfile` reverse-proxies `/api/*` and `/ws` to the backend and serves `frontend/` directly for everything else, with automatic HTTPS for the domain. `ddns_update.py` (run on a schedule) keeps your DNS pointed at your current public IP if your home connection doesn't have a static one. Requires forwarding ports 80/443 on your router to this machine.
 
-**Self-hosted on a real domain**: see `infra/` - a Caddyfile reverse-proxies your domain to the app with automatic HTTPS, and `ddns_update.py` (run on a schedule) keeps your DNS pointed at your current public IP if your home connection doesn't have a static one. Requires forwarding ports 80/443 on your router to this machine.
+**Quick/casual**: tunnel Caddy's local port instead of the backend's - e.g. `ngrok http 8080` - and share the resulting HTTPS URL. Tunneling port 8000 directly won't work anymore, since the backend alone serves no HTML.

@@ -17,27 +17,27 @@
         <h1>Welcome back</h1>
         <p class="subtitle">Log in to keep playing</p>
 
-        <form method="post" action="/login">
+        <form id="loginForm" method="post" action="/api/auth/login">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" required autofocus>
 
             <label for="password">Password</label>
             <input type="password" id="password" name="password" required>
 
-            <a class="forgot-link" href="/forgot-password">Forgot password?</a>
+            <a class="forgot-link" href="/forgot-password.html">Forgot password?</a>
 
             <button type="submit" class="btn-primary">Log In</button>
         </form>
 
         <div id="message" class="message"></div>
 
-        <form id="resendForm" method="post" action="/resend-verification">
+        <form id="resendForm" method="post" action="/api/auth/resend-verification">
             <input type="hidden" id="resendEmail" name="email">
             <button type="submit" class="btn-secondary">Resend verification email</button>
         </form>
 
         <div class="footer-link">
-            Don't have an account? <a href="/signup">Sign up</a>
+            Don't have an account? <a href="/signup.html">Sign up</a>
         </div>
     </div>
 </div>

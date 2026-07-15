@@ -1,3 +1,29 @@
+(app_routes) {
+	handle /api/* {
+		reverse_proxy localhost:8000
+	}
+
+	handle /ws {
+		reverse_proxy localhost:8000
+	}
+
+	handle /static/* {
+		root * ../frontend
+		file_server
+	}
+
+	handle {
+		root * ../frontend/pages
+		file_server
+	}
+}
+
 alaab.ai {
-    reverse_proxy localhost:8000
+	redir / /games.html
+	import app_routes
+}
+
+:8080 {
+	redir / /games.html
+	import app_routes
 }

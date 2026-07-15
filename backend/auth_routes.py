@@ -1,15 +1,40 @@
-import os
-
 import psycopg2.errors
-from fastapi import APIRouter, Request, Form
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
-from config import PAGES_DIR, EMAIL_RE, NICKNAME_RE, SESSION_COOKIE, SESSION_MAX_AGE
+from config import EMAIL_RE, NICKNAME_RE, SESSION_COOKIE, SESSION_MAX_AGE
 from db import db_execute
-from security import hash_password, verify_password, generate_token, hash_token, create_session_cookie
+from security import hash_password, verify_password, generate_token, hash_token, create_session_cookie, get_session
 from email_utils import send_email, build_base_url
 
-router = APIRouter()
+router = APIRouter(prefix="/api/auth")
+
+
+class SignupBody(BaseModel):
+    email: str
+    nickname: str
+    password: str
+    confirm_password: str
+
+
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+
+class ResendVerificationBody(BaseModel):
+    email: str
+
+
+class ForgotPasswordBody(BaseModel):
+    email: str
+
+
+class ResetPasswordBody(BaseModel):
+    token: str
+    new_password: str
+    confirm_new_password: str
 
 
 def is_password_reused(user_id, current_hash, new_password):
@@ -28,43 +53,52 @@ def is_password_reused(user_id, current_hash, new_password):
     return False
 
 
-@router.get("/login")
-def login_page():
-    return FileResponse(os.path.join(PAGES_DIR, "login.html"))
+def ok(**extra):
+    return JSONResponse({"ok": True, **extra})
 
 
-@router.get("/signup")
-def signup_page():
-    return FileResponse(os.path.join(PAGES_DIR, "signup.html"))
+def err(code):
+    return JSONResponse({"ok": False, "error": code})
+
+
+@router.get("/me")
+def me(request: Request):
+    session = get_session(request)
+    if not session:
+        return JSONResponse({"authenticated": False})
+    return JSONResponse({
+        "authenticated": True,
+        "email": session["email"],
+        "nickname": session["nickname"],
+    })
 
 
 @router.post("/signup")
-def signup(request: Request, email: str = Form(...), nickname: str = Form(...),
-           password: str = Form(...), confirm_password: str = Form(...)):
-    email = email.strip().lower()
-    nickname = nickname.strip()
+def signup(request: Request, body: SignupBody):
+    email = body.email.strip().lower()
+    nickname = body.nickname.strip()
 
     if not EMAIL_RE.match(email):
-        return RedirectResponse("/signup?error=invalid_email", status_code=303)
+        return err("invalid_email")
 
     if not NICKNAME_RE.match(nickname):
-        return RedirectResponse("/signup?error=invalid_nickname", status_code=303)
+        return err("invalid_nickname")
 
-    if password != confirm_password:
-        return RedirectResponse("/signup?error=mismatch", status_code=303)
+    if body.password != body.confirm_password:
+        return err("mismatch")
 
-    if len(password) < 8 or len(password.encode("utf-8")) > 72:
-        return RedirectResponse("/signup?error=weak", status_code=303)
+    if len(body.password) < 8 or len(body.password.encode("utf-8")) > 72:
+        return err("weak")
 
-    password_hash = hash_password(password)
+    password_hash = hash_password(body.password)
 
     existing = db_execute("SELECT 1 FROM users WHERE email = %s", (email,), fetch="one")
     if existing:
-        return RedirectResponse("/signup?error=taken", status_code=303)
+        return err("taken")
 
     existing_nickname = db_execute("SELECT 1 FROM users WHERE LOWER(nickname) = LOWER(%s)", (nickname,), fetch="one")
     if existing_nickname:
-        return RedirectResponse("/signup?error=nickname_taken", status_code=303)
+        return err("nickname_taken")
 
     try:
         row = db_execute(
@@ -74,7 +108,7 @@ def signup(request: Request, email: str = Form(...), nickname: str = Form(...),
             commit=True,
         )
     except psycopg2.errors.UniqueViolation:
-        return RedirectResponse("/signup?error=taken", status_code=303)
+        return err("taken")
 
     user_id = row[0]
 
@@ -86,7 +120,7 @@ def signup(request: Request, email: str = Form(...), nickname: str = Form(...),
         commit=True,
     )
 
-    verify_link = f"{build_base_url(request)}/verify-email?token={token}"
+    verify_link = f"{build_base_url(request)}/api/auth/verify-email?token={token}"
     send_email(
         email,
         "Verify your Tic Tac Toe account",
@@ -94,7 +128,7 @@ def signup(request: Request, email: str = Form(...), nickname: str = Form(...),
         "This link expires in 24 hours.",
     )
 
-    return RedirectResponse("/login?created=1", status_code=303)
+    return ok()
 
 
 @router.get("/verify-email")
@@ -107,18 +141,18 @@ def verify_email(token: str):
     )
 
     if not row:
-        return RedirectResponse("/login?error=invalid_token", status_code=303)
+        return RedirectResponse("/login.html?error=invalid_token", status_code=303)
 
     user_id = row[0]
     db_execute("UPDATE users SET email_verified = true WHERE id = %s", (user_id,), commit=True)
     db_execute("UPDATE email_verification_tokens SET used_at = now() WHERE token_hash = %s", (token_hash,), commit=True)
 
-    return RedirectResponse("/login?verified=1", status_code=303)
+    return RedirectResponse("/login.html?verified=1", status_code=303)
 
 
 @router.post("/resend-verification")
-def resend_verification(request: Request, email: str = Form(...)):
-    email = email.strip().lower()
+def resend_verification(request: Request, body: ResendVerificationBody):
+    email = body.email.strip().lower()
     row = db_execute("SELECT id, email_verified FROM users WHERE email = %s", (email,), fetch="one")
 
     if row and not row[1]:
@@ -131,7 +165,7 @@ def resend_verification(request: Request, email: str = Form(...)):
             commit=True,
         )
 
-        verify_link = f"{build_base_url(request)}/verify-email?token={token}"
+        verify_link = f"{build_base_url(request)}/api/auth/verify-email?token={token}"
         send_email(
             email,
             "Verify your Tic Tac Toe account",
@@ -139,52 +173,47 @@ def resend_verification(request: Request, email: str = Form(...)):
             "This link expires in 24 hours.",
         )
 
-    return RedirectResponse("/login?resent=1", status_code=303)
+    return ok()
 
 
 @router.post("/login")
-def login(email: str = Form(...), password: str = Form(...)):
-    email = email.strip().lower()
+def login(body: LoginBody):
+    email = body.email.strip().lower()
     row = db_execute(
         "SELECT id, password_hash, email_verified, nickname FROM users WHERE email = %s",
         (email,),
         fetch="one",
     )
 
-    if not row or len(password.encode("utf-8")) > 72 or not verify_password(password, row[1]):
-        return RedirectResponse("/login?error=invalid", status_code=303)
+    if not row or len(body.password.encode("utf-8")) > 72 or not verify_password(body.password, row[1]):
+        return err("invalid")
 
     if not row[2]:
-        return RedirectResponse("/login?error=unverified", status_code=303)
+        return err("unverified")
 
     user_id, nickname = row[0], row[3]
 
-    redirect = RedirectResponse("/games", status_code=303)
-    redirect.set_cookie(
+    response = ok(nickname=nickname)
+    response.set_cookie(
         SESSION_COOKIE,
         create_session_cookie(user_id, email, nickname),
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
     )
-    return redirect
+    return response
 
 
-@router.get("/logout")
+@router.post("/logout")
 def logout():
-    redirect = RedirectResponse("/login?logged_out=1", status_code=303)
-    redirect.delete_cookie(SESSION_COOKIE)
-    return redirect
-
-
-@router.get("/forgot-password")
-def forgot_password_page():
-    return FileResponse(os.path.join(PAGES_DIR, "forgot-password.html"))
+    response = ok()
+    response.delete_cookie(SESSION_COOKIE)
+    return response
 
 
 @router.post("/forgot-password")
-def forgot_password(request: Request, email: str = Form(...)):
-    email = email.strip().lower()
+def forgot_password(request: Request, body: ForgotPasswordBody):
+    email = body.email.strip().lower()
     row = db_execute("SELECT id FROM users WHERE email = %s", (email,), fetch="one")
 
     if row:
@@ -197,7 +226,7 @@ def forgot_password(request: Request, email: str = Form(...)):
             commit=True,
         )
 
-        reset_link = f"{build_base_url(request)}/reset-password?token={token}"
+        reset_link = f"{build_base_url(request)}/reset-password.html?token={token}"
         send_email(
             email,
             "Reset your Tic Tac Toe password",
@@ -205,17 +234,12 @@ def forgot_password(request: Request, email: str = Form(...)):
             "This link expires in 1 hour. If you didn't request this, you can ignore this email.",
         )
 
-    return RedirectResponse("/login?reset_requested=1", status_code=303)
-
-
-@router.get("/reset-password")
-def reset_password_page():
-    return FileResponse(os.path.join(PAGES_DIR, "reset-password.html"))
+    return ok()
 
 
 @router.post("/reset-password")
-def reset_password(token: str = Form(...), new_password: str = Form(...), confirm_new_password: str = Form(...)):
-    token_hash = hash_token(token)
+def reset_password(body: ResetPasswordBody):
+    token_hash = hash_token(body.token)
     row = db_execute(
         "SELECT user_id FROM password_reset_tokens WHERE token_hash = %s AND used_at IS NULL AND expires_at > now()",
         (token_hash,),
@@ -223,25 +247,25 @@ def reset_password(token: str = Form(...), new_password: str = Form(...), confir
     )
 
     if not row:
-        return RedirectResponse("/login?error=invalid_reset_link", status_code=303)
+        return err("invalid_reset_link")
 
     user_id = row[0]
 
-    if new_password != confirm_new_password:
-        return RedirectResponse(f"/reset-password?token={token}&error=mismatch", status_code=303)
+    if body.new_password != body.confirm_new_password:
+        return err("mismatch")
 
-    if len(new_password) < 8 or len(new_password.encode("utf-8")) > 72:
-        return RedirectResponse(f"/reset-password?token={token}&error=weak", status_code=303)
+    if len(body.new_password) < 8 or len(body.new_password.encode("utf-8")) > 72:
+        return err("weak")
 
     current_hash = db_execute("SELECT password_hash FROM users WHERE id = %s", (user_id,), fetch="one")[0]
 
-    if is_password_reused(user_id, current_hash, new_password):
-        return RedirectResponse(f"/reset-password?token={token}&error=reused", status_code=303)
+    if is_password_reused(user_id, current_hash, body.new_password):
+        return err("reused")
 
-    new_hash = hash_password(new_password)
+    new_hash = hash_password(body.new_password)
 
     db_execute("INSERT INTO password_history (user_id, password_hash) VALUES (%s, %s)", (user_id, current_hash), commit=True)
     db_execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, user_id), commit=True)
     db_execute("UPDATE password_reset_tokens SET used_at = now() WHERE token_hash = %s", (token_hash,), commit=True)
 
-    return RedirectResponse("/login?reset_done=1", status_code=303)
+    return ok()

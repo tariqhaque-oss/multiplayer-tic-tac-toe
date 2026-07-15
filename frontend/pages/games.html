@@ -10,12 +10,14 @@
 
 <body>
 
+<script src="/static/js/auth-guard.js"></script>
+
 <div class="brand-header">
     <div class="brand-mark">
         <span class="logo">🎮</span>
         GameHub
     </div>
-    <a href="/logout"><button type="button" class="btn-secondary" style="width:auto; margin:0;">Log Out</button></a>
+    <button type="button" class="btn-secondary" style="width:auto; margin:0;" onclick="logout()">Log Out</button>
 </div>
 
 <div class="hub-wrap">
@@ -25,7 +27,7 @@
     </div>
 
     <div class="game-grid">
-        <a class="game-card" href="/games/tic-tac-toe">
+        <a class="game-card" href="/index.html">
             <div class="icon">⭕❌</div>
             <h2>Tic Tac Toe</h2>
             <p>Classic 2-player game. Play a random opponent or invite a friend with a private code.</p>

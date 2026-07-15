@@ -16,7 +16,7 @@
         <h1>Create your account</h1>
         <p class="subtitle">Join and start playing with friends</p>
 
-        <form method="post" action="/signup">
+        <form id="signupForm" method="post" action="/api/auth/signup">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" required autofocus>
 
@@ -36,7 +36,7 @@
         <div id="message" class="message"></div>
 
         <div class="footer-link">
-            Already have an account? <a href="/login">Log in</a>
+            Already have an account? <a href="/login.html">Log in</a>
         </div>
     </div>
 </div>

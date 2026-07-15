@@ -5,10 +5,6 @@ import secrets
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(BASE_DIR)
-FRONTEND_DIR = os.path.join(REPO_ROOT, "frontend")
-PAGES_DIR = os.path.join(FRONTEND_DIR, "pages")
-STATIC_ASSETS_DIR = os.path.join(FRONTEND_DIR, "static")
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 

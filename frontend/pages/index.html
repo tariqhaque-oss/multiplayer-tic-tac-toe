@@ -10,12 +10,14 @@
 
 <body>
 
+<script src="/static/js/auth-guard.js"></script>
+
 <div class="brand-header">
     <div class="brand-mark">
         <span class="logo">⭕❌</span>
         Tic Tac Toe
     </div>
-    <a href="/games"><button type="button" class="btn-secondary" style="width:auto; margin:0;">← Back to Games</button></a>
+    <a href="/games.html"><button type="button" class="btn-secondary" style="width:auto; margin:0;">← Back to Games</button></a>
 </div>
 
 <div class="layout" id="pregameWrapper">
@@ -88,7 +90,7 @@
 
         <button onclick="resetGame()" class="btn-primary">Reset Match</button>
         <button type="button" onclick="leaveGame()" class="btn-secondary">Leave Game</button>
-        <a href="/logout"><button type="button" class="btn-secondary">Log Out</button></a>
+        <button type="button" class="btn-secondary" onclick="logout()">Log Out</button>
     </div>
 
     <div class="scorecard">
