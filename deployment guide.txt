@@ -68,6 +68,12 @@ This laptop (LAPTOP-8JUL17OD, 192.168.0.208)
            if it has changed, PATCHes the Cloudflare A record for alaab.ai
            to point at it (proxied=false - Cloudflare is DNS-only here;
            Caddy does its own TLS instead of using Cloudflare's proxy/TLS)
+         - Runs as the SYSTEM account with Logon Mode "Interactive/
+           Background" (confirmed 2026-07-22 - see section 8) - this is
+           what makes it start with no one logged in and survive reboots.
+           Recreate it with the exact command in section 8 if `schtasks
+           /query /tn "TicTacToe-DDNS-Update" /v /fo LIST` ever shows a
+           different Run As User or "Interactive only" instead.
          - This is the ONLY piece of this stack that survives as a proper
            background service across logins/reboots. Postgres, uvicorn,
            and Caddy are all started by hand in terminals per
@@ -87,10 +93,13 @@ them automatically.
 
 Reliability characteristics of this setup, plainly stated:
 - If the laptop sleeps, loses power, or reboots, the site goes down until
-  someone manually restarts Postgres, uvicorn, and Caddy.
+  someone manually restarts Postgres, uvicorn, and Caddy - see section 8.
 - If the ISP rotates the public IP, the site is unreachable for up to
   ~5 minutes until the next DDNS task run updates DNS - and possibly
-  longer if DNS caching adds to that.
+  longer if DNS caching adds to that. This laptop's own WiFi adapter is
+  now pointed at 1.1.1.1/1.0.0.1 directly (see section 8) specifically to
+  avoid one source of that extra caching delay - the router's own
+  resolver cache holding a stale record past Cloudflare's 5-minute TTL.
 - There is no load balancing, no auto-restart-on-crash, no automated
   backups of backend/pgdata, and no monitoring/alerting.
 - Capacity is whatever this one laptop and one home upload connection
@@ -459,3 +468,86 @@ pg_ctl.exe/caddy.exe paths from this machine's setup) - it is a
 convenience wrapper around section 6, not a substitute for understanding
 it. If it ever behaves unexpectedly, fall back to the manual commands in
 sections 4-6 to see what's actually happening.
+
+
+====================================================================
+8. WHAT SURVIVES A REBOOT, AND THE 2026-07-22 DDNS INCIDENT
+====================================================================
+
+Laptop reboot (or just a logout/login):
+
+- Auto-restarts on its own, no action needed: Scheduled Task
+  "TicTacToe-DDNS-Update" - confirmed 2026-07-22 to run as the SYSTEM
+  account with Logon Mode "Interactive/Background", so it starts with no
+  one logged in and keeps running across reboots.
+- Does NOT auto-restart - run `python deploy.py start` (section 7) after
+  every laptop reboot, or the site is down until you do:
+    - Postgres (backend/pgdata, port 5433)
+    - uvicorn (backend/main.py, port 8000)
+    - Caddy (infra/Caddyfile, ports 80/443/8080)
+  Windows gives none of these three a way to auto-start on boot today -
+  that would be the first thing to fix if this keeps being a problem (a
+  Scheduled Task set to run at startup, same idea as the DDNS task, or
+  wrapping each as a proper Windows service).
+
+Router reboot:
+
+- Port forwarding (80/443 -> 192.168.0.208) and the DHCP address
+  reservation for this laptop's MAC are stored in the router's own saved
+  config and survive a reboot - nothing to redo here or in the router UI.
+- The router may get handed a new public IP by the ISP on reconnect. The
+  DDNS scheduled task picks this up automatically within 5 minutes -
+  no manual action needed, PROVIDED the task is actually running (see the
+  incident below - it wasn't, for over a week, without anyone noticing).
+- A router reboot also clears the router's own DNS cache as a side
+  effect, which incidentally is the fastest way to clear a stale cached
+  alaab.ai record for other devices on the LAN that rely on the router
+  for DNS (this laptop no longer does - see below).
+
+Incident (2026-07-22): section 1 describes the DDNS scheduled task as
+already running - it wasn't. `schtasks /query` found no task named
+"TicTacToe-DDNS-Update" at all. DNS had been silently stale since the
+last manual run of infra/ddns_update.py on 2026-07-15 (visible in
+infra/ddns_update.log), and alaab.ai became unreachable once the ISP
+rotated this laptop's public IP. Fixed in two steps:
+
+  1. Ran `python infra/ddns_update.py` once by hand to push the correct
+     A record to Cloudflare immediately (don't wait on the task for this
+     part - it's a 5-second manual fix).
+
+  2. Created the scheduled task properly. This needs an elevated (Run as
+     administrator) PowerShell window - it fails with "Access is denied"
+     otherwise:
+
+    schtasks /create /tn "TicTacToe-DDNS-Update" /tr "\"C:\Python313\python.exe\" \"C:\Users\thaque2050\Desktop\tic-tac-toe\infra\ddns_update.py\"" /sc minute /mo 5 /ru "SYSTEM" /rl HIGHEST /f
+
+  Verify it's really running as SYSTEM (not just whichever user happened
+  to create it) with:
+
+    schtasks /query /tn "TicTacToe-DDNS-Update" /v /fo LIST
+
+  Look for `Run As User: SYSTEM` and `Logon Mode: Interactive/
+  Background`. If it instead shows a personal username and "Interactive
+  only", the task will silently stop the moment that user logs out -
+  recreate it with the command above from an elevated PowerShell.
+
+Separately, this laptop's WiFi adapter DNS servers were changed from
+"obtained automatically" (i.e. from the router) to Cloudflare's resolver
+directly, because the router's own DNS cache kept serving a stale
+alaab.ai A record well past Cloudflare's 5-minute TTL, independent of
+whether the DDNS task was working. This is a one-time laptop-side NIC
+setting - it persists across both laptop and router reboots and doesn't
+need to be reapplied. Listed here in case alaab.ai (or anything else)
+ever seems to resolve to a stale address on this machine specifically:
+
+    Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ServerAddresses ("1.1.1.1","1.0.0.1")
+    ipconfig /flushdns
+
+Check the current setting with:
+
+    Get-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -AddressFamily IPv4
+
+To revert to the router's own DNS (not recommended - reintroduces the
+stale-cache risk above):
+
+    Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ResetServerAddresses
