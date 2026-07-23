@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Court Piece - GameHub</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/court-piece.css">
+</head>
+
+<body>
+
+<script src="/static/js/auth-guard.js"></script>
+
+<div class="brand-header">
+    <div class="brand-mark">
+        <span class="logo">🃏</span>
+        Court Piece
+    </div>
+    <a href="/games.html"><button type="button" class="btn-secondary" style="width:auto; margin:0;">← Back to Games</button></a>
+</div>
+
+<!-- ===================== Configuration Menu ===================== -->
+<div id="configScreen" class="cp-config">
+    <div class="cp-config-panel">
+        <h2>Room Type</h2>
+        <div class="cp-toggle-row">
+            <button type="button" id="modeLocalBtn" class="cp-toggle-btn active">Local Game</button>
+            <button type="button" id="modeOnlineBtn" class="cp-toggle-btn">Private Online Room (Simulated)</button>
+        </div>
+
+        <div id="localConfig">
+            <h2>Seat Control</h2>
+            <p class="hint">At least 2 of the 4 seats are always Bots. You may control one seat, or your whole partnership (2 seats) - never seats from both teams.</p>
+
+            <label class="cp-radio-row">
+                <input type="radio" name="seatPreset" value="one" checked>
+                Control 1 seat (vs 3 Bots)
+            </label>
+            <select id="onePresetSeat">
+                <option value="P1">Player 1 (bottom)</option>
+                <option value="P2">Player 2 (left)</option>
+                <option value="P3">Player 3 (top)</option>
+                <option value="P4">Player 4 (right)</option>
+            </select>
+
+            <label class="cp-radio-row">
+                <input type="radio" name="seatPreset" value="partnership">
+                Control my partnership - 2 seats (vs 2 Bots)
+            </label>
+            <select id="partnershipPresetTeam">
+                <option value="A">Team A - Player 1 &amp; Player 3</option>
+                <option value="B">Team B - Player 2 &amp; Player 4</option>
+            </select>
+
+            <label class="cp-radio-row">
+                <input type="radio" name="seatPreset" value="watch">
+                Watch only - 4 Bots play
+            </label>
+
+            <div id="seatPreview" class="cp-seat-preview"></div>
+
+            <button type="button" id="startLocalBtn" class="btn-primary">Start Game</button>
+        </div>
+
+        <div id="onlineConfig" style="display:none;">
+            <h2>Private Online Room</h2>
+            <p class="hint">Simulated mock-network room - no real other players, but the table fills with simulated guests and a spectator overflow list you can interact with.</p>
+
+            <button type="button" id="createRoomBtn" class="btn-primary">Create Room</button>
+
+            <hr>
+
+            <label for="joinRoomCode">Join Room via Key</label>
+            <input type="text" id="joinRoomCode" maxlength="4" placeholder="4-digit code">
+            <button type="button" id="joinRoomBtn" class="btn-primary">Join Room</button>
+        </div>
+
+        <div id="configMessage" class="cp-config-message"></div>
+    </div>
+</div>
+
+<!-- ===================== Card Table ===================== -->
+<div id="tableScreen" class="cp-table-screen" style="display:none;">
+
+    <div class="cp-info-panel">
+        <div><strong>Trump:</strong> <span id="trumpDisplay">-</span></div>
+        <div><strong>Last Trick:</strong> <span id="lastTrickDisplay">-</span></div>
+        <div><strong>Center Pile (uncollected):</strong> <span id="pileDisplay">0 tricks</span></div>
+        <div class="cp-score-row">
+            <span>Team A (P1+P3): <strong id="scoreA">0</strong> tens, <strong id="tricksA">0</strong> tricks</span>
+            <span>Team B (P2+P4): <strong id="scoreB">0</strong> tens, <strong id="tricksB">0</strong> tricks</span>
+        </div>
+        <div id="roomCodeDisplay" style="display:none;"></div>
+    </div>
+
+    <div class="cp-main-area">
+        <div class="cp-card-table">
+            <div class="cp-seat cp-seat-top" data-seat="P3">
+                <div class="cp-hand" id="hand-P3"></div>
+                <div class="cp-seat-label" id="label-P3"></div>
+            </div>
+            <div class="cp-seat cp-seat-left" data-seat="P2">
+                <div class="cp-hand" id="hand-P2"></div>
+                <div class="cp-seat-label" id="label-P2"></div>
+            </div>
+            <div class="cp-center-pile" id="centerPile"></div>
+            <div class="cp-seat cp-seat-right" data-seat="P4">
+                <div class="cp-hand" id="hand-P4"></div>
+                <div class="cp-seat-label" id="label-P4"></div>
+            </div>
+            <div class="cp-seat cp-seat-bottom" data-seat="P1">
+                <div class="cp-hand" id="hand-P1"></div>
+                <div class="cp-seat-label" id="label-P1"></div>
+            </div>
+        </div>
+
+        <div id="spectatorSidebar" class="cp-spectator-sidebar" style="display:none;">
+            <h3>Spectators</h3>
+            <div id="spectatorList"></div>
+            <button type="button" id="requestAnySeatBtn" class="btn-secondary" style="display:none;">Request a Seat</button>
+        </div>
+    </div>
+
+    <div class="cp-controls-row">
+        <button type="button" id="leaveTableBtn" class="btn-secondary" style="display:none;">Leave Table / Become Spectator</button>
+        <button type="button" id="newRoundBtn" class="btn-primary" style="display:none;">New Round</button>
+        <button type="button" id="leaveGameBtn" class="btn-secondary">Leave Game</button>
+    </div>
+
+    <div id="commentaryFeed" class="cp-commentary"></div>
+</div>
+
+<!-- ===================== Trump Selection Modal ===================== -->
+<div id="trumpModal" class="cp-modal-overlay" style="display:none;">
+    <div class="cp-modal">
+        <h2 id="trumpModalTitle">Choose Trump Suit</h2>
+        <div class="cp-trump-choices">
+            <button type="button" class="cp-suit-choice" data-suit="♠">♠<br>Spades</button>
+            <button type="button" class="cp-suit-choice cp-suit-red" data-suit="♥">♥<br>Hearts</button>
+            <button type="button" class="cp-suit-choice cp-suit-red" data-suit="♦">♦<br>Diamonds</button>
+            <button type="button" class="cp-suit-choice" data-suit="♣">♣<br>Clubs</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== Seat Request Modal (targets the human) ===================== -->
+<div id="seatRequestModal" class="cp-modal-overlay" style="display:none;">
+    <div class="cp-modal">
+        <h2>Seat Request</h2>
+        <p id="seatRequestText"></p>
+        <button type="button" id="seatRequestAcceptBtn" class="btn-primary">Give up seat</button>
+        <button type="button" id="seatRequestDeclineBtn" class="btn-secondary">Keep playing</button>
+    </div>
+</div>
+
+<!-- ===================== Round Over Modal ===================== -->
+<div id="roundOverModal" class="cp-modal-overlay" style="display:none;">
+    <div class="cp-modal">
+        <h2 id="roundOverTitle">Round Over</h2>
+        <p id="roundOverDetail"></p>
+        <button type="button" id="roundOverCloseBtn" class="btn-primary">Continue</button>
+    </div>
+</div>
+
+<script src="/static/js/court-piece-engine.js"></script>
+<script src="/static/js/court-piece-room.js"></script>
+<script src="/static/js/court-piece-ui.js"></script>
+
+</body>
+</html>

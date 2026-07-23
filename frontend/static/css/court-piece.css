@@ -1,0 +1,348 @@
+:root {
+    --felt: #0b6e4f;
+    --felt-dark: #084d38;
+    --card-bg: #fefefe;
+    --card-border: #d1d5db;
+    --card-back: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 6px, #1e40af 6px, #1e40af 12px);
+    --suit-black: #111827;
+    --suit-red: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --felt: #064e3b;
+        --felt-dark: #022c22;
+        --card-bg: #f1f5f9;
+        --card-border: #94a3b8;
+        --suit-black: #111827;
+        --suit-red: #dc2626;
+    }
+}
+
+/* ---------------- Config screen ---------------- */
+.cp-config {
+    display: flex;
+    justify-content: center;
+}
+
+.cp-config-panel {
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px var(--shadow);
+    padding: 28px;
+}
+
+.cp-config-panel h2 {
+    margin: 18px 0 10px;
+    font-size: 18px;
+}
+.cp-config-panel h2:first-child { margin-top: 0; }
+
+.cp-config-panel .hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+}
+
+.cp-toggle-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.cp-toggle-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+}
+.cp-toggle-btn.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+}
+
+.cp-radio-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 4px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+#localConfig select, #onlineConfig input {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 6px;
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+}
+
+.cp-seat-preview {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin: 14px 0;
+    font-size: 13px;
+}
+.cp-seat-preview div {
+    padding: 8px;
+    border-radius: 8px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    text-align: center;
+}
+.cp-seat-preview div.is-human { border-color: var(--brand); font-weight: 700; }
+
+#onlineConfig hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 18px 0;
+}
+
+.cp-config-message {
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--error);
+    text-align: center;
+    min-height: 20px;
+}
+
+/* ---------------- Table screen ---------------- */
+.cp-table-screen {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.cp-info-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-bottom: 14px;
+    font-size: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    align-items: center;
+}
+.cp-score-row { display: flex; gap: 24px; flex-wrap: wrap; }
+#roomCodeDisplay {
+    margin-left: auto;
+    font-weight: 700;
+    background: var(--input-bg);
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
+.cp-main-area {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.cp-card-table {
+    width: min(90vw, 640px);
+    aspect-ratio: 1 / 0.85;
+    background: radial-gradient(circle at center, var(--felt) 0%, var(--felt-dark) 100%);
+    border-radius: 20px;
+    border: 10px solid #5b3a21;
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.6);
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    padding: 10px;
+    position: relative;
+}
+
+.cp-seat { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.cp-seat-top { grid-column: 2; grid-row: 1; }
+.cp-seat-left { grid-column: 1; grid-row: 2; }
+.cp-seat-right { grid-column: 3; grid-row: 2; }
+.cp-seat-bottom { grid-column: 2; grid-row: 3; }
+
+.cp-seat.cp-active-turn .cp-seat-label {
+    animation: cp-pulse 1s ease-in-out infinite;
+    box-shadow: 0 0 0 2px #fde047;
+}
+@keyframes cp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+.cp-seat-label {
+    font-size: 12px;
+    color: #fff;
+    background: rgba(0,0,0,0.35);
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+.cp-seat-label .cp-role { opacity: 0.8; font-size: 10px; }
+
+.cp-hand {
+    display: flex;
+    gap: -8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+}
+.cp-seat-left .cp-hand, .cp-seat-right .cp-hand {
+    flex-direction: column;
+}
+
+.cp-center-pile {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    max-width: 140px;
+    margin: 0 auto;
+}
+
+/* ---------------- Cards ---------------- */
+.cp-card {
+    width: 46px;
+    height: 66px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.3);
+    margin-left: -14px;
+    cursor: default;
+    user-select: none;
+    transition: transform 0.15s ease;
+}
+.cp-card:first-child { margin-left: 0; }
+.cp-card .cp-rank { line-height: 1; }
+.cp-card .cp-suit { line-height: 1; font-size: 16px; }
+.cp-card.cp-black { color: var(--suit-black); }
+.cp-card.cp-red { color: var(--suit-red); }
+
+.cp-card.cp-back {
+    background: var(--card-back);
+    border: 1px solid #1e3a8a;
+}
+
+.cp-card.cp-legal {
+    cursor: pointer;
+    transform: translateY(-8px);
+    box-shadow: 0 0 0 3px #fde047, 0 4px 6px rgba(0,0,0,0.4);
+}
+.cp-card.cp-legal:hover { transform: translateY(-14px) scale(1.05); }
+
+.cp-card.cp-mini {
+    width: 30px;
+    height: 42px;
+    font-size: 10px;
+    margin-left: -18px;
+}
+.cp-card.cp-mini .cp-suit { font-size: 12px; }
+
+/* ---------------- Spectator sidebar ---------------- */
+.cp-spectator-sidebar {
+    width: 220px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 13px;
+}
+.cp-spectator-sidebar h3 { margin: 0 0 10px; font-size: 14px; }
+.cp-spectator-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+}
+.cp-spectator-row button {
+    font-size: 11px;
+    padding: 4px 8px;
+    width: auto;
+}
+
+/* ---------------- Controls / commentary ---------------- */
+.cp-controls-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 16px 0;
+    flex-wrap: wrap;
+}
+.cp-controls-row button { width: auto; }
+
+.cp-commentary {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    height: 160px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    font-family: ui-monospace, monospace;
+}
+.cp-commentary div { border-bottom: 1px dashed var(--border); padding: 2px 0; }
+
+/* ---------------- Modals ---------------- */
+.cp-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+.cp-modal {
+    background: var(--panel-bg);
+    border-radius: 14px;
+    padding: 26px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+}
+.cp-modal h2 { margin-top: 0; }
+.cp-modal button { margin: 8px 6px 0; width: auto; }
+
+.cp-trump-choices {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+}
+.cp-suit-choice {
+    padding: 20px;
+    font-size: 28px;
+    border-radius: 10px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--suit-black);
+    cursor: pointer;
+}
+.cp-suit-choice.cp-suit-red { color: var(--suit-red); }
+.cp-suit-choice:hover { background: var(--brand); color: #fff; }
+
+@media (max-width: 700px) {
+    .cp-main-area { flex-direction: column; align-items: center; }
+    .cp-spectator-sidebar { width: 100%; max-width: 400px; }
+}

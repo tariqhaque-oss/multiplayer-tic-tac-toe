@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Connect Four - GameHub</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/connect4.css">
+</head>
+
+<body>
+
+<script src="/static/js/auth-guard.js"></script>
+
+<div class="brand-header">
+    <div class="brand-mark">
+        <span class="logo">🔴🟡</span>
+        Connect Four
+    </div>
+    <a href="/games.html"><button type="button" class="btn-secondary" style="width:auto; margin:0;">← Back to Games</button></a>
+</div>
+
+<div class="layout" id="pregameWrapper">
+    <div id="statsPanel">
+        <h2>Your Stats</h2>
+
+        <select id="statsFilter">
+            <option value="overall">All Games</option>
+            <option value="random">Random Games</option>
+        </select>
+
+        <div class="score-row">
+            <span>Games</span>
+            <strong id="statGames">0</strong>
+        </div>
+        <div class="score-row">
+            <span>Wins</span>
+            <strong id="statWins">0</strong>
+        </div>
+        <div class="score-row">
+            <span>Losses</span>
+            <strong id="statLosses">0</strong>
+        </div>
+        <div class="score-row">
+            <span>Draws</span>
+            <strong id="statDraws">0</strong>
+        </div>
+    </div>
+
+    <div id="lobby">
+        <h2>Play vs Bot</h2>
+        <label for="botDifficulty">Difficulty</label>
+        <select id="botDifficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+        </select>
+        <button id="botBtn" type="button" class="btn-primary">Play vs Bot</button>
+
+        <hr>
+
+        <h2>Join Random Game</h2>
+        <button id="randomBtn" type="button" class="btn-primary">Join Random Game</button>
+
+        <hr>
+
+        <h2>Create a Private Game</h2>
+        <label for="createKey">Secret code (5 letters/numbers, share with your friend)</label>
+        <input type="text" id="createKey" maxlength="5" placeholder="e.g. A3F9K">
+        <button type="button" id="createBtn" class="btn-primary">Create Game</button>
+
+        <hr>
+
+        <h2>Join a Private Game</h2>
+        <label for="joinKey">Enter the code your friend gave you</label>
+        <input type="text" id="joinKey" maxlength="5" placeholder="Enter the shared code">
+        <button type="button" id="joinBtn" class="btn-primary">Join Game</button>
+
+        <div id="lobbyMessage" class="lobby-message"></div>
+    </div>
+</div>
+
+<div class="layout" id="gameWrapper" style="display:none;">
+    <div class="game-area">
+        <div id="player"></div>
+        <div id="keyDisplay"></div>
+        <div id="status"></div>
+        <div id="message"></div>
+        <div id="board"></div>
+
+        <button onclick="resetGame()" class="btn-primary">Reset Match</button>
+        <button type="button" onclick="leaveGame()" class="btn-secondary">Leave Game</button>
+        <button type="button" class="btn-secondary" onclick="logout()">Log Out</button>
+    </div>
+
+    <div class="scorecard">
+        <h2>Scorecard</h2>
+
+        <div class="score-row">
+            <span>Red Wins</span>
+            <strong id="scoreR">0</strong>
+        </div>
+
+        <div class="score-row">
+            <span>Yellow Wins</span>
+            <strong id="scoreY">0</strong>
+        </div>
+
+        <div class="score-row">
+            <span>Draws</span>
+            <strong id="scoreDraw">0</strong>
+        </div>
+
+        <hr>
+
+        <div class="score-row">
+            <span>Players</span>
+            <strong id="playersConnected">0</strong>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/connect4.js"></script>
+
+</body>
+</html>

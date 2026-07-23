@@ -7,6 +7,14 @@
 		reverse_proxy localhost:8000
 	}
 
+	handle /ws/connect4 {
+		reverse_proxy localhost:8000
+	}
+
+	handle /ws/ludo {
+		reverse_proxy localhost:8000
+	}
+
 	handle /static/* {
 		root * ../frontend
 		file_server

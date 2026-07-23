@@ -9,10 +9,13 @@ A real-time multiplayer game platform with email-based accounts, starting with T
 - Unique display nickname chosen at signup - shown to other players instead of your email
 - Game hub after login (`/games`) - a card grid to pick a game, ready for more games to be added later
 - Tic Tac Toe: join a random opponent, create/join a private game behind a shared 5-character code, or play a bot
-- Bot opponent with 3 difficulty levels - Easy (random), Medium (win/block heuristic), Hard (minimax search - provably never loses)
-- Any number of games can run concurrently; each game is capped at exactly 2 players (or 1 player + bot)
+- Connect Four: same random/private/bot matchmaking as Tic Tac Toe, on a 7x6 gravity board - its own backend module, WebSocket endpoint, and results table, kept fully independent of Tic Tac Toe's code
+- Ludo: 2-4 players racing 4 tokens each around a shared board (dice rolls, captures, home stretches) - random/private games support 2-4 human players with turn order skipping empty seats; "vs Bot" mode is always 1 human + 3 bots. Its own backend module, WebSocket endpoint, and results table (one row per participant per round, since a Ludo round can have more than 2 players)
+- Court Piece: 4-player trick-taking card game, fixed partnerships (P1+P3 vs P2+P4), with a "Double Sar" consecutive-trick-win collection rule. Entirely client-side (no backend/database involvement, unlike the other three games) - local play against bots with strict seat-control guardrails (at least 2 seats always bot-controlled; a human may control one seat or their own partnership's two seats, never one from each team) plus fog-of-war hiding a human's second seat except on its own turn, or a simulated "Private Online Room" (mocked multiplayer/spectator system, no real network)
+- Bot opponents with 3 difficulty levels per game - Easy (random), Medium (win/block heuristic), Hard (minimax search for Tic Tac Toe/Connect Four - depth-limited with a heuristic evaluation for Connect Four, since a full search tree is too large to solve outright; Ludo's "hard" bot is a greedy heuristic instead, since dice randomness makes deep search largely pointless). Court Piece's bots always follow suit and try to win the trick, independent of the difficulty concept used elsewhere
+- Any number of games can run concurrently; each Tic Tac Toe/Connect Four game is capped at exactly 2 players (or 1 player + bot); each Ludo game supports up to 4 players (or 1 player + 3 bots); Court Piece is always exactly 4 seats (1-2 human, rest bot-controlled)
 - Live board, turn indicator, win/draw detection, running score per game
-- Persistent per-player stats (games/wins/losses/draws), filterable by "All Games", "Random Games" (combined), a specific private-game opponent, or a specific bot difficulty
+- Persistent per-player stats (games/wins/losses/draws) per game, filterable by "All Games", "Random Games" (combined), a specific private-game opponent, or a specific bot difficulty
 
 ## Stack
 
@@ -31,7 +34,7 @@ Browser
   |  https://alaab.ai/...          (one origin, no CORS)
   v
 Caddy  (infra/Caddyfile)
-  |-- /api/*, /ws  -->  backend (uvicorn, :8000)   JSON + WebSocket only
+  |-- /api/*, /ws, /ws/connect4, /ws/ludo  -->  backend (uvicorn, :8000)   JSON + WebSocket only
   `-- everything else -->  frontend/  (static files, file_server)
 ```
 
@@ -59,14 +62,20 @@ shared files - the backend never reads from or serves `frontend/`.
 │   ├── security.py            Password hashing, tokens, session cookies
 │   ├── email_utils.py          Gmail SMTP sending, base-URL helper
 │   ├── auth_routes.py           JSON API under /api/auth: signup, login, logout, /me, email verification, password reset
-│   ├── stats_routes.py           /api/stats
+│   ├── stats_routes.py           /api/stats (Tic Tac Toe)
 │   ├── game.py                     Tic-tac-toe engine, bot AI (minimax), and the /ws WebSocket handler
+│   ├── connect4_stats_routes.py       /api/connect4/stats
+│   ├── connect4.py                     Connect Four engine (gravity board, bot AI), and the /ws/connect4 WebSocket handler - fully separate from game.py, no shared state or code
+│   ├── ludo_stats_routes.py              /api/ludo/stats
+│   ├── ludo.py                             Ludo engine (2-4 player board, dice, captures, bot AI), and the /ws/ludo WebSocket handler - fully separate from game.py and connect4.py, no shared state or code
 │   ├── requirements.txt
 │   ├── migrations/                 Numbered SQL migrations, applied in order
 │   │   ├── 001_initial_schema.sql
 │   │   ├── 002_email_auth.sql
 │   │   ├── 003_nicknames_history_and_stats.sql
-│   │   └── 004_bot_accounts.sql
+│   │   ├── 004_bot_accounts.sql
+│   │   ├── 005_connect4_results.sql
+│   │   └── 006_ludo_results.sql
 │   └── .env.example                Template for required environment variables
 ├── frontend/
 │   ├── pages/                      Full HTML documents - static files, no backend involvement to serve them
@@ -75,20 +84,31 @@ shared files - the backend never reads from or serves `frontend/`.
 │   │   ├── login.html
 │   │   ├── signup.html
 │   │   ├── forgot-password.html
-│   │   └── reset-password.html
+│   │   ├── reset-password.html
+│   │   ├── connect4.html               Connect Four lobby + board
+│   │   ├── ludo.html                     Ludo lobby + board
+│   │   └── court-piece.html                Court Piece config menu + card table (no backend calls at all - purely client-side)
 │   └── static/                     Mounted at /static - assets only, no page markup
 │       ├── css/
 │       │   ├── style.css               Shared design system (colors, buttons, panels, dark mode)
 │       │   ├── login.css                Page-specific overrides
 │       │   ├── games.css
-│       │   └── tic-tac-toe.css
+│       │   ├── tic-tac-toe.css
+│       │   ├── connect4.css
+│       │   ├── ludo.css
+│       │   └── court-piece.css
 │       └── js/
-│           ├── auth-guard.js           Shared: requireAuth() page gate + logout(), used by games.html/index.html
+│           ├── auth-guard.js           Shared: requireAuth() page gate + logout(), used by every game page
 │           ├── login.js
 │           ├── signup.js
 │           ├── forgot-password.js
 │           ├── reset-password.js
-│           └── tic-tac-toe.js          WebSocket client, board rendering, stats panel
+│           ├── tic-tac-toe.js          WebSocket client, board rendering, stats panel
+│           ├── connect4.js             Same role as tic-tac-toe.js, for Connect Four - no shared code between the two
+│           ├── ludo.js                 Same role, for Ludo - dice roll/move UI, 52-cell path + yard/home rendering
+│           ├── court-piece-engine.js   Court Piece rules + bot AI - pure logic, no DOM access, dual Node/browser module (has its own test suite run under Node)
+│           ├── court-piece-room.js     Court Piece's mock "Private Online Room" simulation - seat/spectator bookkeeping only, no card-game rules
+│           └── court-piece-ui.js       Court Piece DOM rendering + event wiring - ties the engine and room modules to the page
 ├── infra/
 │   ├── Caddyfile             Path-routes /api/* and /ws to the backend; serves frontend/ as static files for everything else
 │   ├── ddns_update.py         Keeps a Cloudflare DNS A record pointed at this machine's current public IP
@@ -111,6 +131,8 @@ shared files - the backend never reads from or serves `frontend/`.
    psql -f backend/migrations/002_email_auth.sql
    psql -f backend/migrations/003_nicknames_history_and_stats.sql
    psql -f backend/migrations/004_bot_accounts.sql
+   psql -f backend/migrations/005_connect4_results.sql
+   psql -f backend/migrations/006_ludo_results.sql
    ```
 4. Install dependencies:
    ```

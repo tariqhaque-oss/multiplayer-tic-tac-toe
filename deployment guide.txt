@@ -28,8 +28,8 @@ This laptop (LAPTOP-8JUL17OD, 192.168.0.208)
    |   0.0.0.0:8080 (plain HTTP, local-only site block, no domain/TLS)
    |     - Automatic HTTPS: gets/renews a Let's Encrypt certificate for
    |       alaab.ai on its own (ACME HTTP-01 challenge over port 80)
-   |     - Path-routes: /api/* and /ws -> reverse_proxy to localhost:8000
-   |       (the backend); everything else -> file_server straight from
+   |     - Path-routes: /api/*, /ws, /ws/connect4, and /ws/ludo ->
+   |       reverse_proxy to localhost:8000 (the backend); everything else -> file_server straight from
    |       frontend/ on disk (frontend/pages/*.html by filename,
    |       frontend/static/... for css/js). Backend and frontend are two
    |       separate processes - Caddy is what makes them look like one
@@ -41,10 +41,12 @@ This laptop (LAPTOP-8JUL17OD, 192.168.0.208)
    |       directly to the internet; only reachable via Caddy (hitting
    |       port 8000 directly, e.g. for local testing, only gets you
    |       /api/... and /ws - there's no page to load without Caddy)
-   |     - Single process, single worker. In-memory Python dict `games`
-   |       (see backend/game.py) holds all live board state and WebSocket
-   |       connections - this state lives ONLY in this process's memory.
-   |       Restarting uvicorn drops every in-progress game.
+   |     - Single process, single worker. Each multiplayer game module
+   |       (game.py, connect4.py, ludo.py) keeps its own in-memory `games`
+   |       dict holding live board state and WebSocket connections - this
+   |       state lives ONLY in this process's memory. Restarting uvicorn
+   |       drops every in-progress game. (Court Piece is client-only and
+   |       has no server-side state - see ARCHITECTURE.md.)
    |
    |-- frontend/ (frontend/pages/*.html, frontend/static/{css,js}/...)
    |     - Static files only, no process of its own - served directly by
@@ -59,7 +61,10 @@ This laptop (LAPTOP-8JUL17OD, 192.168.0.208)
    |       machine and listens on the default port 5432 - that service is
    |       unrelated to this app and is not used by it.
    |     - Holds: users, password_history, email_verification_tokens,
-   |       password_reset_tokens, game_results (see backend/migrations/)
+   |       password_reset_tokens, game_results (Tic Tac Toe), connect4_results,
+   |       ludo_results (see backend/migrations/ - six numbered files, 001-006).
+   |       Court Piece has no table at all - it's client-side only, no
+   |       backend involvement (see ARCHITECTURE.md "Court Piece is different")
    |
    `-- Scheduled Task "TicTacToe-DDNS-Update" (Windows Task Scheduler)
          - Runs infra/ddns_update.py every 5 minutes via
@@ -166,10 +171,19 @@ To confirm everything is actually live:
   curl -s -o /dev/null -w "%{http_code}\n" https://alaab.ai/login.html        (expect 200, public)
   curl -s -o /dev/null -w "%{http_code}\n" http://alaab.ai/login.html         (expect 308, redirects to https)
   curl -s http://localhost:8080/api/auth/me                                  (expect {"authenticated":false} when logged out)
+  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/stats            (expect 401, unauthenticated)
+  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/connect4/stats   (expect 401, unauthenticated)
+  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/ludo/stats       (expect 401, unauthenticated)
+  curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/court-piece.html     (expect 200 - static file, no backend call at all)
 
-First logged-in player to open a given game becomes X, the second becomes
-O, anyone after that is a spectator. Everyone signs up/logs in with their
-own email via /signup.html and /login.html.
+Everyone signs up/logs in with their own email via /signup.html and
+/login.html, then picks a game from /games.html. Each of Tic Tac Toe,
+Connect Four, and Ludo has its own matchmaking (random/private-by-code/
+bot) - see ARCHITECTURE.md for the exact join rules per game, they differ
+(Tic Tac Toe/Connect Four cap at 2 players; Ludo supports up to 4, with
+private-mode overflow going to spectators). Court Piece needs no backend
+verification since it has none - it's a purely client-side page (see
+ARCHITECTURE.md "Court Piece is different").
 
 Quick/casual alternative (no domain, no router changes): tunnel Caddy's
 local port instead of the backend's, e.g. `ngrok http 8080` (authtoken
@@ -209,7 +223,7 @@ held. Roughly in order of how much they'd force a design change:
      laptop, no automated backups, no replication.
    - Cloud: use a managed Postgres (RDS, Cloud SQL, Supabase, Neon,
      Render Postgres, etc). Migration path: run the same files already in
-     backend/migrations/ (001-004, in order) against the new managed DB,
+     backend/migrations/ (001-006, in order) against the new managed DB,
      then pg_dump the local cluster and pg_restore it if you need to keep
      existing accounts/history. Point backend/.env's PGHOST/PGPORT/
      PGUSER/PGPASSWORD/PGDATABASE at the managed instance - db.py and the
@@ -234,10 +248,12 @@ held. Roughly in order of how much they'd force a design change:
      managed container platforms terminate HTTPS for you, making Caddy
      unnecessary).
 
-3d. In-memory game/WebSocket state (backend/game.py)
-   - Today: the `games` dict and all active WebSocket connections live in
-     the memory of one uvicorn process. This is fine as long as there is
-     exactly one process.
+3d. In-memory game/WebSocket state (backend/game.py, connect4.py, ludo.py)
+   - Today: each of the three multiplayer games keeps its own separate
+     `games` dict (and all active WebSocket connections) in the memory of
+     one uvicorn process - Court Piece has no server-side state at all,
+     it's client-only (see ARCHITECTURE.md "Court Piece is different").
+     This is fine as long as there is exactly one process.
    - Cloud risk: the moment you run more than one instance/replica for
      scale or zero-downtime deploys, players can land on different
      instances that don't share `games`, silently breaking matches. Two
