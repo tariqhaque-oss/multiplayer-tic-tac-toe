@@ -1,4 +1,8 @@
-(app_routes) {
+{
+	auto_https off
+}
+
+:{$PORT} {
 	handle /api/* {
 		reverse_proxy localhost:8000
 	}
@@ -15,23 +19,20 @@
 		reverse_proxy localhost:8000
 	}
 
+	handle /ws/court-piece {
+		reverse_proxy localhost:8000
+	}
+
 	handle /static/* {
-		root * ../frontend
+		root * /app/frontend
+		header Cache-Control "no-cache"
 		file_server
 	}
+
+	redir / /games.html
 
 	handle {
-		root * ../frontend/pages
+		root * /app/frontend/pages
 		file_server
 	}
-}
-
-alaab.ai {
-	redir / /games.html
-	import app_routes
-}
-
-:8080 {
-	redir / /games.html
-	import app_routes
 }

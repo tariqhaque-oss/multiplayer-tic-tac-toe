@@ -1,0 +1,22 @@
+# Secrets - never bake into the image, Cloud Run gets these via env vars /
+# Secret Manager instead (see "deployment guide to gcp.txt")
+backend/.env
+
+# Runtime logs
+backend/uvicorn.log
+backend/pglog.txt
+
+# Local Postgres cluster data (binary, machine-specific, huge)
+backend/pgdata/
+
+# Python
+backend/__pycache__/
+*.pyc
+
+# Everything not needed inside the image
+.git/
+.claude/
+node_modules/
+*.md
+mobile/
+android/

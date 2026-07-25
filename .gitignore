@@ -1,10 +1,7 @@
 # Secrets - never commit
 backend/.env
-infra/.env
 
 # Runtime logs
-infra/ddns_update.log
-infra/caddy.log
 backend/uvicorn.log
 
 # Local Postgres cluster data (binary, machine-specific)
@@ -18,3 +15,14 @@ backend/__pycache__/
 # Claude Code local session state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Flutter native app (mobile/) - the signing keystore must never be
+# committed; back it up separately (losing it means you can never publish
+# an update to the same Play Store listing again)
+mobile/android/app/android.keystore
+mobile/android/key.properties
+mobile/build/
+mobile/.dart_tool/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/build/

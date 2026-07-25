@@ -20,61 +20,47 @@
     <a href="/games.html"><button type="button" class="btn-secondary" style="width:auto; margin:0;">← Back to Games</button></a>
 </div>
 
+<!-- ===================== Seat legend (shown on both screens) ===================== -->
+<div class="cp-seat-legend">
+    <strong>Seats:</strong>
+    <span class="cp-legend-chip cp-team-a">P1 (bottom) &amp; P3 (top) = Team A</span>
+    <span class="cp-legend-chip cp-team-b">P2 (left) &amp; P4 (right) = Team B</span>
+    <span class="cp-legend-note">Partners sit across from each other. First to 3 of the 4 "10" cards wins the round.</span>
+</div>
+
 <!-- ===================== Configuration Menu ===================== -->
 <div id="configScreen" class="cp-config">
     <div class="cp-config-panel">
-        <h2>Room Type</h2>
-        <div class="cp-toggle-row">
-            <button type="button" id="modeLocalBtn" class="cp-toggle-btn active">Local Game</button>
-            <button type="button" id="modeOnlineBtn" class="cp-toggle-btn">Private Online Room (Simulated)</button>
-        </div>
+        <h2>Play vs Bots</h2>
+        <p class="hint">You control your partnership (2 seats) vs 2 bots.</p>
 
-        <div id="localConfig">
-            <h2>Seat Control</h2>
-            <p class="hint">At least 2 of the 4 seats are always Bots. You may control one seat, or your whole partnership (2 seats) - never seats from both teams.</p>
+        <select id="botTeam">
+            <option value="A">Team A - Player 1 &amp; Player 3</option>
+            <option value="B">Team B - Player 2 &amp; Player 4</option>
+        </select>
 
-            <label class="cp-radio-row">
-                <input type="radio" name="seatPreset" value="one" checked>
-                Control 1 seat (vs 3 Bots)
-            </label>
-            <select id="onePresetSeat">
-                <option value="P1">Player 1 (bottom)</option>
-                <option value="P2">Player 2 (left)</option>
-                <option value="P3">Player 3 (top)</option>
-                <option value="P4">Player 4 (right)</option>
-            </select>
+        <button type="button" id="startBotBtn" class="btn-primary">Play vs Bots</button>
 
-            <label class="cp-radio-row">
-                <input type="radio" name="seatPreset" value="partnership">
-                Control my partnership - 2 seats (vs 2 Bots)
-            </label>
-            <select id="partnershipPresetTeam">
-                <option value="A">Team A - Player 1 &amp; Player 3</option>
-                <option value="B">Team B - Player 2 &amp; Player 4</option>
-            </select>
+        <hr>
 
-            <label class="cp-radio-row">
-                <input type="radio" name="seatPreset" value="watch">
-                Watch only - 4 Bots play
-            </label>
+        <h2>Join Random Game</h2>
+        <p class="hint">Matched with up to 3 other players. Starts as soon as the table fills.</p>
+        <button type="button" id="randomBtn" class="btn-primary">Join Random Game</button>
 
-            <div id="seatPreview" class="cp-seat-preview"></div>
+        <hr>
 
-            <button type="button" id="startLocalBtn" class="btn-primary">Start Game</button>
-        </div>
+        <h2>Create a Private Game</h2>
+        <label for="createKey">Secret code (5 letters/numbers, share with friends)</label>
+        <input type="text" id="createKey" maxlength="5" placeholder="e.g. A3F9K">
+        <button type="button" id="createBtn" class="btn-primary">Create Game</button>
 
-        <div id="onlineConfig" style="display:none;">
-            <h2>Private Online Room</h2>
-            <p class="hint">Simulated mock-network room - no real other players, but the table fills with simulated guests and a spectator overflow list you can interact with.</p>
+        <hr>
 
-            <button type="button" id="createRoomBtn" class="btn-primary">Create Room</button>
-
-            <hr>
-
-            <label for="joinRoomCode">Join Room via Key</label>
-            <input type="text" id="joinRoomCode" maxlength="4" placeholder="4-digit code">
-            <button type="button" id="joinRoomBtn" class="btn-primary">Join Room</button>
-        </div>
+        <h2>Join a Private Game</h2>
+        <label for="joinKey">Enter the code your friend gave you</label>
+        <input type="text" id="joinKey" maxlength="5" placeholder="Enter the shared code">
+        <p class="hint">First 4 joiners play. Anyone after that spectates and can request a seat.</p>
+        <button type="button" id="joinBtn" class="btn-primary">Join Game</button>
 
         <div id="configMessage" class="cp-config-message"></div>
     </div>
@@ -91,6 +77,7 @@
             <span>Team A (P1+P3): <strong id="scoreA">0</strong> tens, <strong id="tricksA">0</strong> tricks</span>
             <span>Team B (P2+P4): <strong id="scoreB">0</strong> tens, <strong id="tricksB">0</strong> tricks</span>
         </div>
+        <div id="matchScoreDisplay"></div>
         <div id="roomCodeDisplay" style="display:none;"></div>
     </div>
 
@@ -118,7 +105,7 @@
         <div id="spectatorSidebar" class="cp-spectator-sidebar" style="display:none;">
             <h3>Spectators</h3>
             <div id="spectatorList"></div>
-            <button type="button" id="requestAnySeatBtn" class="btn-secondary" style="display:none;">Request a Seat</button>
+            <div id="requestSeatRow" style="display:none;"></div>
         </div>
     </div>
 
@@ -163,8 +150,6 @@
     </div>
 </div>
 
-<script src="/static/js/court-piece-engine.js"></script>
-<script src="/static/js/court-piece-room.js"></script>
 <script src="/static/js/court-piece-ui.js"></script>
 
 </body>

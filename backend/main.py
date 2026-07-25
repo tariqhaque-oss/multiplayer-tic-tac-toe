@@ -7,6 +7,8 @@ import connect4
 import connect4_stats_routes
 import ludo
 import ludo_stats_routes
+import court_piece
+import court_piece_stats_routes
 
 app = FastAPI()
 
@@ -17,3 +19,5 @@ app.include_router(connect4.router)
 app.include_router(connect4_stats_routes.router)
 app.include_router(ludo.router)
 app.include_router(ludo_stats_routes.router)
+app.include_router(court_piece.router)
+app.include_router(court_piece_stats_routes.router)

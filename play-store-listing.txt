@@ -1,0 +1,82 @@
+Draft Play Store listing text for GameHub.
+Paste/edit these into Play Console > Grow > Store presence > Main store listing.
+This file is not read by any code - it's just a copy-paste source for you.
+
+--------------------------------------------------------------------
+App name (max 30 chars)
+--------------------------------------------------------------------
+GameHub
+
+--------------------------------------------------------------------
+Short description (max 80 chars)
+--------------------------------------------------------------------
+Play multiple games such as Tic Tac Toe, Connect Four, Ludo, Court Piece online, or vs bots.
+
+--------------------------------------------------------------------
+Full description (max 4000 chars)
+--------------------------------------------------------------------
+GameHub is a real-time multiplayer game hub. Create a free account and play:
+
+- Tic Tac Toe - classic 3x3, random opponent, private games with friends, or bots
+- Connect Four - 7x6 gravity board, same random/private/bot matchmaking
+- Ludo - 2-4 players race 4 tokens around the board, dice rolls, captures, home stretches
+- Court Piece - 4-player trick-taking card game with fixed partnerships and a "Double Sar" rule, fog-of-war enforced so you only ever see your own hand
+
+Every game supports:
+- Random matchmaking against other online players
+- Private games you create and share a short code for, to play with friends
+- Bot opponents when no one else is around (three difficulty levels for the board games)
+- Persistent stats - wins, losses, and draws tracked per game
+
+No ads. No third-party trackers. Just the games.
+
+--------------------------------------------------------------------
+Privacy policy URL (required)
+--------------------------------------------------------------------
+https://alaab.ai/privacy.html
+
+--------------------------------------------------------------------
+App category
+--------------------------------------------------------------------
+Games > Board (or Card, if you'd rather lead with Court Piece)
+
+--------------------------------------------------------------------
+Contact details (required)
+--------------------------------------------------------------------
+Email: tarique.haq@gmail.com
+Website: https://alaab.ai
+
+--------------------------------------------------------------------
+Graphics you still need to supply yourself (Bubblewrap only makes the
+app icon from frontend/static/icons/):
+--------------------------------------------------------------------
+- Feature graphic: 1024 x 500 px JPG/PNG, no transparency
+- At least 2 phone screenshots (min 320px, max 3840px on the long side)
+  - Easiest way: run the app (as a website or the built APK) and screenshot
+    the games.html hub, and one in-progress game board
+- Hi-res icon: 512 x 512 px, 32-bit PNG with alpha - Bubblewrap generates
+  android/app/src/main/ic_launcher-web.png from the maskable icon, which
+  works for this
+
+--------------------------------------------------------------------
+Content rating questionnaire (Play Console > Policy > App content)
+--------------------------------------------------------------------
+This is a multiplayer strategy/card game hub with no violence, gambling
+(no real-money wagering - Court Piece is a card game but not a casino/
+betting app), user-generated content beyond a chosen nickname, or ads.
+Answering the questionnaire honestly along those lines should land in
+the lowest rating tier (e.g. PEGI 3 / Everyone). The one thing to flag
+honestly: it has user-to-user real-time interaction (opponents can see
+your nickname and play against you) and an account/login system - the
+questionnaire asks about both directly.
+
+--------------------------------------------------------------------
+Data safety section (Play Console > Policy > App content > Data safety)
+--------------------------------------------------------------------
+Matches privacy.html:
+- Collects: email address (account management, not shared), and
+  gameplay data (app functionality)
+- Data is encrypted in transit (HTTPS)
+- Users can request deletion (contact email in privacy policy)
+- Not shared with third parties
+- No ads / no analytics SDKs

@@ -6,6 +6,21 @@
     --card-back: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 6px, #1e40af 6px, #1e40af 12px);
     --suit-black: #111827;
     --suit-red: #dc2626;
+
+    /* Card size (overridden smaller under 700px - see that media query).
+       --card-overlap/--card-overlap-y drive the "poker fan" negative-
+       margin overlap used on desktop, where there's room to spare;
+       --card-overlap is horizontal (top/bottom hands), --card-overlap-y
+       is vertical (left/right hands, applied against card *height* which
+       is much larger than width, hence the different value). Below
+       700px, hands stop using overlap margins entirely and shrink-to-fit
+       via flexbox instead - see the media query at the bottom. */
+    --card-w: 46px;
+    --card-h: 66px;
+    --card-overlap: 14px;
+    --card-overlap-y: 50px;
+    --mini-card-w: 30px;
+    --mini-card-h: 42px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,6 +32,34 @@
         --suit-black: #111827;
         --suit-red: #dc2626;
     }
+}
+
+/* ---------------- Seat legend ---------------- */
+.cp-seat-legend {
+    max-width: 900px;
+    margin: 0 auto 16px;
+    padding: 10px 16px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+}
+.cp-legend-chip {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 12px;
+    color: #fff;
+}
+.cp-legend-chip.cp-team-a { background: #dc2626; }
+.cp-legend-chip.cp-team-b { background: #2563eb; }
+.cp-legend-note {
+    color: var(--text-muted);
+    font-size: 12px;
 }
 
 /* ---------------- Config screen ---------------- */
@@ -154,14 +197,25 @@
 
 .cp-card-table {
     width: min(90vw, 640px);
-    aspect-ratio: 1 / 0.85;
+    /* A square-ish minimum, not a fixed aspect-ratio: a 13-card hand on
+       the left/right seats needs more vertical room than a fixed ratio
+       would allow, and fixed-ratio content used to just overflow the box
+       instead of growing it. min-height gives the same default look
+       while still letting the table grow when a hand needs more space. */
+    min-height: min(76vw, 544px);
     background: radial-gradient(circle at center, var(--felt) 0%, var(--felt-dark) 100%);
     border-radius: 20px;
     border: 10px solid #5b3a21;
     box-shadow: 0 10px 30px -10px rgba(0,0,0,0.6);
     display: grid;
     grid-template-columns: 1fr 2fr 1fr;
-    grid-template-rows: 1fr 1fr 1fr;
+    /* auto, not 1fr: this container's height is no longer fixed (see
+       min-height above), and `fr` tracks in a container whose own height
+       is content-driven rather than definite are resolved inconsistently
+       across browsers - sometimes collapsing rows instead of sizing them
+       to content. `auto` unambiguously sizes each row to fit what's
+       actually inside it. */
+    grid-template-rows: auto auto auto;
     padding: 10px;
     position: relative;
 }
@@ -189,13 +243,33 @@
 
 .cp-hand {
     display: flex;
-    gap: -8px;
     flex-wrap: wrap;
     justify-content: center;
     max-width: 100%;
 }
 .cp-seat-left .cp-hand, .cp-seat-right .cp-hand {
     flex-direction: column;
+}
+
+/* Top/bottom hands overlap horizontally; left/right hands overlap
+   vertically (they're stacked in a column) - each direction only applies
+   its own margin so cards actually overlap instead of just shifting. */
+.cp-seat-top .cp-hand > .cp-card,
+.cp-seat-bottom .cp-hand > .cp-card {
+    margin-left: calc(-1 * var(--card-overlap));
+}
+.cp-seat-top .cp-hand > .cp-card:first-child,
+.cp-seat-bottom .cp-hand > .cp-card:first-child {
+    margin-left: 0;
+}
+.cp-seat-left .cp-hand > .cp-card,
+.cp-seat-right .cp-hand > .cp-card {
+    margin-left: 0;
+    margin-top: calc(-1 * var(--card-overlap-y));
+}
+.cp-seat-left .cp-hand > .cp-card:first-child,
+.cp-seat-right .cp-hand > .cp-card:first-child {
+    margin-top: 0;
 }
 
 .cp-center-pile {
@@ -212,8 +286,8 @@
 
 /* ---------------- Cards ---------------- */
 .cp-card {
-    width: 46px;
-    height: 66px;
+    width: var(--card-w);
+    height: var(--card-h);
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 6px;
@@ -221,17 +295,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     font-weight: 700;
-    font-size: 14px;
+    font-size: clamp(10px, 3.4vw, 14px);
     box-shadow: 0 2px 3px rgba(0,0,0,0.3);
-    margin-left: -14px;
     cursor: default;
     user-select: none;
     transition: transform 0.15s ease;
 }
-.cp-card:first-child { margin-left: 0; }
 .cp-card .cp-rank { line-height: 1; }
-.cp-card .cp-suit { line-height: 1; font-size: 16px; }
+.cp-card .cp-suit { line-height: 1; font-size: 1.15em; }
 .cp-card.cp-black { color: var(--suit-black); }
 .cp-card.cp-red { color: var(--suit-red); }
 
@@ -244,16 +317,19 @@
     cursor: pointer;
     transform: translateY(-8px);
     box-shadow: 0 0 0 3px #fde047, 0 4px 6px rgba(0,0,0,0.4);
+    /* Overlapping siblings paint on top in DOM order regardless of the
+       translateY lift above - without this, a legal card sandwiched
+       between others would look raised but its tap target would still
+       be covered by the next card in the hand. */
+    z-index: 10;
 }
 .cp-card.cp-legal:hover { transform: translateY(-14px) scale(1.05); }
 
 .cp-card.cp-mini {
-    width: 30px;
-    height: 42px;
+    width: var(--mini-card-w);
+    height: var(--mini-card-h);
     font-size: 10px;
-    margin-left: -18px;
 }
-.cp-card.cp-mini .cp-suit { font-size: 12px; }
 
 /* ---------------- Spectator sidebar ---------------- */
 .cp-spectator-sidebar {
@@ -345,4 +421,47 @@
 @media (max-width: 700px) {
     .cp-main-area { flex-direction: column; align-items: center; }
     .cp-spectator-sidebar { width: 100%; max-width: 400px; }
+
+    :root {
+        --card-w: 34px;
+        --card-h: 48px;
+        --mini-card-w: 24px;
+        --mini-card-h: 34px;
+    }
+
+    /* On mobile, hands stop using the negative-margin overlap trick
+       entirely and shrink-to-fit via flexbox instead: every card gets an
+       equal share of the hand's available space (down to a hard
+       min-width/min-height floor), computed by the browser's own flex
+       algorithm rather than manually-tuned overlap pixel values. This
+       guarantees every card stays at least partially visible no matter
+       how narrow the screen is, instead of needing the overlap amount
+       re-tuned (and re-verified by eye) for every device width. */
+    .cp-hand {
+        flex-wrap: nowrap;
+    }
+
+    .cp-seat-top .cp-hand > .cp-card,
+    .cp-seat-bottom .cp-hand > .cp-card,
+    .cp-seat-left .cp-hand > .cp-card,
+    .cp-seat-right .cp-hand > .cp-card {
+        margin: 0;
+    }
+
+    .cp-seat-top .cp-hand > .cp-card,
+    .cp-seat-bottom .cp-hand > .cp-card {
+        flex: 1 1 0;
+        width: auto;
+        min-width: 14px;
+        max-width: var(--card-w);
+    }
+
+    .cp-seat-left .cp-hand > .cp-card,
+    .cp-seat-right .cp-hand > .cp-card {
+        flex: 1 1 0;
+        width: var(--card-w);
+        height: auto;
+        min-height: 14px;
+        max-height: var(--card-h);
+    }
 }

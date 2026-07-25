@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.alaab.gamehub",
+      "sha256_cert_fingerprints": [
+        "8A:9E:CD:D6:DE:21:6A:85:79:96:A8:B9:1D:A6:BA:9C:26:D8:49:A1:F7:81:9D:61:95:C4:2E:69:68:C4:8F:BE",
+        "3F:BB:33:C0:8E:76:41:83:11:53:F7:F7:8B:D1:01:0E:99:E4:5B:FF:1C:1A:A4:A7:DE:76:F8:61:EC:B2:C0:22"
+      ]
+    }
+  }
+]

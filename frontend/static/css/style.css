@@ -96,7 +96,7 @@ a:hover {
     background: var(--panel-bg);
     border: 1px solid var(--border);
     border-radius: 14px;
-    box-shadow: 0 1px 3px var(--shadow), 0 8px 24px -12px var(--shadow);
+    box-shadow: 0 1px 3px var(--shadow);
     padding: 36px;
 }
 
@@ -144,7 +144,7 @@ button, .btn {
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 12px;
+    padding: 14px 20px;
     margin-top: 10px;
     font-size: 15px;
     font-weight: 600;

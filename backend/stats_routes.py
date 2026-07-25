@@ -1,10 +1,24 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
+from config import BOT_DIFFICULTIES
 from db import db_execute
+from game import get_bot_user_id
 from security import get_session
 
 router = APIRouter()
+
+
+class OfflineResult(BaseModel):
+    difficulty: str
+    my_symbol: str
+    winner: str
+    played_at: str | None = None
+
+
+class SyncOfflineResultsBody(BaseModel):
+    results: list[OfflineResult]
 
 
 @router.get("/api/stats")
@@ -68,3 +82,45 @@ def get_stats(request: Request):
         "random": random_bucket,
         "opponents": [{"nickname": nickname, **bucket} for nickname, bucket in sorted(opponents.items())],
     })
+
+
+@router.post("/api/stats/sync-offline-results")
+def sync_offline_results(request: Request, body: SyncOfflineResultsBody):
+    session = get_session(request)
+    if not session:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    user_id = session["user_id"]
+    synced = 0
+
+    for result in body.results:
+        difficulty = result.difficulty.strip().lower()
+        if difficulty not in BOT_DIFFICULTIES:
+            continue
+        if result.my_symbol not in ("X", "O"):
+            continue
+        if result.winner not in ("X", "O", "Draw"):
+            continue
+
+        bot_user_id = get_bot_user_id(difficulty)
+        if result.my_symbol == "X":
+            x_id, o_id = user_id, bot_user_id
+        else:
+            x_id, o_id = bot_user_id, user_id
+
+        if result.played_at:
+            db_execute(
+                "INSERT INTO game_results (mode, player_x_id, player_o_id, winner, played_at) "
+                "VALUES ('bot', %s, %s, %s, %s)",
+                (x_id, o_id, result.winner, result.played_at),
+                commit=True,
+            )
+        else:
+            db_execute(
+                "INSERT INTO game_results (mode, player_x_id, player_o_id, winner) VALUES ('bot', %s, %s, %s)",
+                (x_id, o_id, result.winner),
+                commit=True,
+            )
+        synced += 1
+
+    return JSONResponse({"ok": True, "synced": synced})

@@ -1,18 +1,20 @@
-// Court Piece UI controller - wires CourtPieceEngine (rules/AI) and
-// CourtPieceRoom (mock online lobby) to the DOM. No game rules live here;
-// this file only renders state and dispatches user actions.
+// Court Piece UI controller - talks to backend/court_piece.py over
+// WebSocket. The server is authoritative for all rules and deals; this
+// file only renders whatever state it's sent and forwards clicks. Unlike
+// the earlier client-only version, fog-of-war is enforced by the SERVER
+// now (myHands only ever contains this connection's own seat(s) - other
+// seats arrive as a bare card count, never real card data).
 (function () {
     "use strict";
 
     const SEATS = ["P1", "P2", "P3", "P4"];
     const SEAT_POSITION_LABEL = { P1: "bottom", P2: "left", P3: "top", P4: "right" };
+    const SEAT_TEAM = { P1: "A", P3: "A", P2: "B", P4: "B" };
 
-    let mode = null;           // "local" | "online"
-    let room = null;           // CourtPieceRoom state, online mode only
-    let seatMeta = {};         // seat -> {type:'human'|'bot'|'guest', isYou, name}
-    let roundState = null;     // CourtPieceEngine round state
-    let trumpCallerSeat = "P1";
-    let matchScore = { A: 0, B: 0 };
+    let socket = null;
+    let mySeats = [];
+    let myRole = null; // "player" | "spectator"
+    let lastState = null;
 
     // ------------------------------------------------------------------
     // DOM refs
@@ -23,360 +25,209 @@
     const commentaryFeed = document.getElementById("commentaryFeed");
 
     function logEvent(text) {
+        if (!text) return;
         const line = document.createElement("div");
         line.textContent = text;
         commentaryFeed.appendChild(line);
         commentaryFeed.scrollTop = commentaryFeed.scrollHeight;
     }
 
-    function seatLabel(seat) {
-        const meta = seatMeta[seat];
-        const name = meta ? meta.name : seat;
-        return `${name} (${seat})`;
-    }
-
-    function cardText(card) {
-        return `${card.rank} of ${suitName(card.suit)}`;
-    }
-
     function suitName(suit) {
         return { "♠": "Spades", "♥": "Hearts", "♦": "Diamonds", "♣": "Clubs" }[suit] || suit;
+    }
+
+    function seatLabelText(seat, state) {
+        const name = state.seatNames[seat];
+        if (!state.occupied.includes(seat)) return "Waiting...";
+        return name || seat;
     }
 
     // ==================================================================
     // Configuration screen
     // ==================================================================
-    const modeLocalBtn = document.getElementById("modeLocalBtn");
-    const modeOnlineBtn = document.getElementById("modeOnlineBtn");
-    const localConfig = document.getElementById("localConfig");
-    const onlineConfig = document.getElementById("onlineConfig");
-
-    modeLocalBtn.addEventListener("click", () => setConfigMode("local"));
-    modeOnlineBtn.addEventListener("click", () => setConfigMode("online"));
-
-    function setConfigMode(m) {
-        mode = m;
-        modeLocalBtn.classList.toggle("active", m === "local");
-        modeOnlineBtn.classList.toggle("active", m === "online");
-        localConfig.style.display = m === "local" ? "block" : "none";
-        onlineConfig.style.display = m === "online" ? "block" : "none";
-        configMessage.textContent = "";
-    }
-    setConfigMode("local");
-
-    // --- Local seat presets ---
-    const onePresetSeat = document.getElementById("onePresetSeat");
-    const partnershipPresetTeam = document.getElementById("partnershipPresetTeam");
-    const seatPreview = document.getElementById("seatPreview");
-
-    function currentPresetSeats() {
-        const preset = document.querySelector('input[name="seatPreset"]:checked').value;
-        if (preset === "one") return [onePresetSeat.value];
-        if (preset === "partnership") return partnershipPresetTeam.value === "A" ? ["P1", "P3"] : ["P2", "P4"];
-        return [];
-    }
-
-    function renderSeatPreview() {
-        const humanSeatsPreview = currentPresetSeats();
-        seatPreview.innerHTML = "";
-        for (const seat of SEATS) {
-            const div = document.createElement("div");
-            const isHuman = humanSeatsPreview.includes(seat);
-            div.textContent = `${seat} (${SEAT_POSITION_LABEL[seat]}): ${isHuman ? "HUMAN (you)" : "BOT"}`;
-            if (isHuman) div.classList.add("is-human");
-            seatPreview.appendChild(div);
-        }
-    }
-
-    document.querySelectorAll('input[name="seatPreset"]').forEach(r => r.addEventListener("change", renderSeatPreview));
-    onePresetSeat.addEventListener("change", renderSeatPreview);
-    partnershipPresetTeam.addEventListener("change", renderSeatPreview);
-    renderSeatPreview();
-
-    document.getElementById("startLocalBtn").addEventListener("click", () => {
-        const humanSeatsList = currentPresetSeats();
-        seatMeta = {};
-        for (const seat of SEATS) {
-            seatMeta[seat] = humanSeatsList.includes(seat)
-                ? { type: "human", isYou: true, name: "You" }
-                : { type: "bot", isYou: false, name: "Bot" };
-        }
-        beginTableSession();
+    document.getElementById("startBotBtn").addEventListener("click", () => {
+        connect(`/ws/court-piece?intent=bot&team=${document.getElementById("botTeam").value}`);
     });
 
-    // --- Online room ---
-    document.getElementById("createRoomBtn").addEventListener("click", () => {
-        const seat = "P1"; // human always seated first in a freshly created room
-        room = CourtPieceRoom.createRoom(seat);
-        room.onChange = onRoomChange;
-        syncSeatMetaFromRoom();
-        beginTableSession();
-        logEvent(`Room created. Code: ${room.code}. Share it so others can join.`);
+    document.getElementById("randomBtn").addEventListener("click", () => {
+        connect("/ws/court-piece?intent=random");
     });
 
-    document.getElementById("joinRoomBtn").addEventListener("click", () => {
-        const code = document.getElementById("joinRoomCode").value.trim();
-        if (!/^\d{4}$/.test(code)) {
-            configMessage.textContent = "Enter the 4-digit room code.";
+    const KEY_PATTERN = /^[A-Za-z0-9]{5}$/;
+
+    document.getElementById("createBtn").addEventListener("click", () => {
+        const key = document.getElementById("createKey").value.trim();
+        if (!KEY_PATTERN.test(key)) {
+            showConfigError("Code must be exactly 5 letters/numbers.");
             return;
         }
-        const { room: joinedRoom } = CourtPieceRoom.joinRoom(code);
-        room = joinedRoom;
-        room.onChange = onRoomChange;
-        syncSeatMetaFromRoom();
-        beginTableSession();
-        logEvent(`Joined room ${room.code}.`);
+        connect(`/ws/court-piece?intent=create&key=${encodeURIComponent(key)}`);
     });
 
-    function syncSeatMetaFromRoom() {
-        seatMeta = {};
-        for (const seat of SEATS) {
-            const s = room.seats[seat];
-            seatMeta[seat] = s ? { type: s.type, isYou: s.isYou, name: s.name } : null;
+    document.getElementById("joinBtn").addEventListener("click", () => {
+        const key = document.getElementById("joinKey").value.trim();
+        if (!KEY_PATTERN.test(key)) {
+            showConfigError("Enter the 5-character code your friend gave you.");
+            return;
         }
+        connect(`/ws/court-piece?intent=join&key=${encodeURIComponent(key)}`);
+    });
+
+    function showConfigError(text) {
+        configMessage.textContent = text;
     }
 
-    function onRoomChange(reason) {
-        syncSeatMetaFromRoom();
-        describeRoomEvent(reason);
-        renderSeatLabels();
-        renderSpectatorSidebar();
-        renderControls();
-        maybeStartRoundWhenTableFull();
-        maybeShowIncomingSeatRequest();
+    const closeErrors = {
+        4402: "That code is already in use by another game. Try a different one.",
+        4403: "Code must be exactly 5 letters/numbers.",
+        4404: "No game found with that code.",
+        4405: "That random game is already full. Try again to join/create another.",
+        4407: "Invalid seat selection.",
+    };
+
+    function connect(path) {
+        configMessage.textContent = "";
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+        socket = new WebSocket(`${protocol}://${location.host}${path}`);
+
+        socket.onclose = (event) => {
+            if (event.code === 4401) {
+                location.href = "/login.html";
+                return;
+            }
+            if (closeErrors[event.code]) {
+                showConfigError(closeErrors[event.code]);
+            }
+            showConfigScreen();
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "player") {
+                mySeats = data.seats;
+                myRole = data.role;
+                onEnterTable(data);
+            } else if (data.type === "state") {
+                onState(data);
+            }
+        };
     }
 
-    function describeRoomEvent(reason) {
-        const [kind, ...rest] = reason.split(":");
-        if (kind === "guest-joined-seat") {
-            logEvent(`Room Update: ${rest[1]} joined the table as ${rest[0]}.`);
-        } else if (kind === "guest-joined-spectator") {
-            logEvent(`Room Update: ${rest[0]} joined as a spectator.`);
-        } else if (kind === "seat-requested") {
-            logEvent(`Room Update: Spectator '${rest[1]}' has requested to take ${rest[0]}'s seat.`);
-        } else if (kind === "request-declined") {
-            logEvent(`Room Update: ${rest[1]}'s request for ${rest[0]} was declined.`);
-        } else if (kind === "seat-transferred") {
-            logEvent(`Room Update: ${rest[1]} took over ${rest[0]}'s seat from ${rest[2]}.`);
-        } else if (kind === "left-table") {
-            logEvent(`Room Update: ${rest[1]} left ${rest[0]}` + (rest[2] === "promoted" ? ` - ${rest[3]} promoted from the spectator queue.` : "."));
-        }
+    function showConfigScreen() {
+        tableScreen.style.display = "none";
+        configScreen.style.display = "flex";
+        mySeats = [];
+        myRole = null;
+        lastState = null;
     }
 
-    function maybeStartRoundWhenTableFull() {
-        if (roundState) return; // already playing
-        if (SEATS.every(s => seatMeta[s])) {
-            beginRound();
-        }
-    }
-
-    // ==================================================================
-    // Starting a session
-    // ==================================================================
-    function beginTableSession() {
+    function onEnterTable(playerMsg) {
         configScreen.style.display = "none";
         tableScreen.style.display = "block";
-        commentaryFeed.innerHTML = "";
-        matchScore = { A: 0, B: 0 };
-        trumpCallerSeat = "P1";
 
         const roomCodeDisplay = document.getElementById("roomCodeDisplay");
-        if (mode === "online") {
-            roomCodeDisplay.style.display = "inline-block";
-            roomCodeDisplay.textContent = `Room: ${room.code}`;
+        if (playerMsg.mode === "private" && playerMsg.key) {
+            roomCodeDisplay.style.display = "block";
+            roomCodeDisplay.textContent = `Room code: ${playerMsg.key}`;
         } else {
             roomCodeDisplay.style.display = "none";
         }
 
-        renderSeatLabels();
-        renderSpectatorSidebar();
-        renderControls();
-
-        if (mode === "local" || SEATS.every(s => seatMeta[s])) {
-            beginRound();
+        if (myRole === "spectator") {
+            logEvent("You are spectating.");
         } else {
-            logEvent("Waiting for the table to fill...");
-            renderHands();
+            logEvent(`You are: ${mySeats.join(" & ")}`);
         }
     }
 
-    function beginRound() {
-        roundState = CourtPieceEngine.createRound(trumpCallerSeat);
-        CourtPieceEngine.dealFirstFive(roundState);
-        logEvent(`New round dealt. ${seatLabel(trumpCallerSeat)} is Eldest Hand and must call trump.`);
-        renderAll();
-        startTrumpSelection();
-    }
+    document.getElementById("leaveGameBtn").addEventListener("click", () => {
+        if (socket) socket.close();
+        showConfigScreen();
+    });
 
     // ==================================================================
     // Trump selection
     // ==================================================================
     const trumpModal = document.getElementById("trumpModal");
 
-    function startTrumpSelection() {
-        const caller = roundState.trumpCallerSeat;
-        if (isLocalHumanSeat(caller)) {
-            document.getElementById("trumpModalTitle").textContent = `${seatLabel(caller)}: Choose Trump Suit`;
-            trumpModal.style.display = "flex";
-        } else {
-            setTimeout(() => {
-                const suit = CourtPieceEngine.chooseBotTrump(roundState.hands[caller]);
-                finalizeTrump(suit);
-            }, 700);
-        }
-    }
-
     document.querySelectorAll(".cp-suit-choice").forEach(btn => {
         btn.addEventListener("click", () => {
             trumpModal.style.display = "none";
-            finalizeTrump(btn.dataset.suit);
+            socket.send(JSON.stringify({ type: "choose_trump", suit: btn.dataset.suit }));
         });
     });
-
-    function finalizeTrump(suit) {
-        CourtPieceEngine.dealRemaining(roundState, suit);
-        logEvent(`${seatLabel(roundState.trumpCallerSeat)} called ${suitName(suit)} (${suit}) as trump. Remaining cards dealt - 13 each.`);
-        renderAll();
-        advanceTurn();
-    }
-
-    // ==================================================================
-    // Turn loop
-    // ==================================================================
-    function advanceTurn() {
-        if (roundState.phase === "round-over") {
-            finishRound();
-            return;
-        }
-        const seat = CourtPieceEngine.currentTurnSeat(roundState);
-        renderAll();
-
-        if (isLocalHumanSeat(seat)) {
-            return; // wait for a manual card click
-        }
-
-        setTimeout(() => {
-            const hand = roundState.hands[seat];
-            const card = CourtPieceEngine.chooseBotCard(hand, roundState);
-            playCardFlow(seat, card);
-        }, 550 + Math.random() * 450);
-    }
-
-    function playCardFlow(seat, card) {
-        const result = CourtPieceEngine.playCard(roundState, seat, card);
-        logEvent(`${seatLabel(seat)} played ${cardText(card)}.`);
-
-        if (result.trickCompleted) {
-            const winner = result.trickWinnerSeat;
-            logEvent(`${seatLabel(winner)} won the trick.` + (result.collected
-                ? " Back-to-back win - the team collects the pile!"
-                : " Pile stays face-down (no back-to-back win yet)."));
-        }
-
-        renderAll();
-
-        if (result.roundCompleted) {
-            setTimeout(finishRound, 900);
-            return;
-        }
-
-        setTimeout(advanceTurn, result.trickCompleted ? 750 : 150);
-    }
-
-    function onCardClick(seat, card) {
-        if (roundState.phase !== "playing") return;
-        if (!isLocalHumanSeat(seat)) return;
-        if (CourtPieceEngine.currentTurnSeat(roundState) !== seat) return;
-        if (!CourtPieceEngine.isLegalMove(roundState.hands[seat], roundState.ledSuit, card)) return;
-        playCardFlow(seat, card);
-    }
 
     // ==================================================================
     // Round over
     // ==================================================================
     const roundOverModal = document.getElementById("roundOverModal");
-
-    function finishRound() {
-        const winnerTeam = roundState.winner;
-        matchScore[winnerTeam]++;
-        const tensA = CourtPieceEngine.countTens(roundState.collected.A);
-        const tensB = CourtPieceEngine.countTens(roundState.collected.B);
-
-        document.getElementById("roundOverTitle").textContent = `Team ${winnerTeam} Wins the Round!`;
-        document.getElementById("roundOverDetail").textContent =
-            `10s captured - Team A: ${tensA}, Team B: ${tensB}. Tricks won - Team A: ${roundState.trickWins.A}, Team B: ${roundState.trickWins.B}. ` +
-            `Match score - Team A: ${matchScore.A}, Team B: ${matchScore.B}.`;
-        roundOverModal.style.display = "flex";
-
-        logEvent(`Round over: Team ${winnerTeam} wins (10s ${tensA}-${tensB}, tricks ${roundState.trickWins.A}-${roundState.trickWins.B}).`);
-
-        document.getElementById("newRoundBtn").style.display = "inline-block";
-        trumpCallerSeat = CourtPieceEngine.nextSeat(trumpCallerSeat);
-        renderAll();
-    }
+    let lastAnnouncedWinner = null;
 
     document.getElementById("roundOverCloseBtn").addEventListener("click", () => {
         roundOverModal.style.display = "none";
     });
 
     document.getElementById("newRoundBtn").addEventListener("click", () => {
-        document.getElementById("newRoundBtn").style.display = "none";
-        beginRound();
+        socket.send(JSON.stringify({ type: "next_round" }));
     });
 
     // ==================================================================
-    // Fog-of-war / seat control helpers
+    // Leave table / spectator requests
     // ==================================================================
-    function isLocalHumanSeat(seat) {
-        return !!(seatMeta[seat] && seatMeta[seat].isYou);
-    }
+    document.getElementById("leaveTableBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ type: "leave_table" }));
+    });
 
-    function countLocalHumanSeats() {
-        return SEATS.filter(isLocalHumanSeat).length;
-    }
+    const seatRequestModal = document.getElementById("seatRequestModal");
+    let shownRequestKey = null;
 
-    function activeSeatForVisibility() {
-        if (!roundState) return null;
-        if (roundState.phase === "trump-selection") return roundState.trumpCallerSeat;
-        if (roundState.phase === "playing") return CourtPieceEngine.currentTurnSeat(roundState);
-        return null;
-    }
+    document.getElementById("seatRequestAcceptBtn").addEventListener("click", () => {
+        seatRequestModal.style.display = "none";
+        shownRequestKey = null;
+        socket.send(JSON.stringify({ type: "respond_seat_request", accept: true }));
+    });
+    document.getElementById("seatRequestDeclineBtn").addEventListener("click", () => {
+        seatRequestModal.style.display = "none";
+        shownRequestKey = null;
+        socket.send(JSON.stringify({ type: "respond_seat_request", accept: false }));
+    });
 
-    function isHandVisible(seat) {
-        if (!isLocalHumanSeat(seat)) return false;
-        if (countLocalHumanSeats() <= 1) return true;
-        return activeSeatForVisibility() === seat;
+    // ==================================================================
+    // State handling
+    // ==================================================================
+    function onState(state) {
+        lastState = state;
+        logEvent(state.message);
+        renderAll(state);
+
+        if (state.phase === "trump-selection" && mySeats.some(s => state.legalForMe[s] === "choose_trump")) {
+            const caller = state.trumpCallerSeat;
+            document.getElementById("trumpModalTitle").textContent = `${caller}: Choose Trump Suit`;
+            trumpModal.style.display = "flex";
+        } else {
+            trumpModal.style.display = "none";
+        }
+
+        if (state.winner && state.winner !== lastAnnouncedWinner) {
+            lastAnnouncedWinner = state.winner;
+            document.getElementById("roundOverTitle").textContent = `Team ${state.winner} Wins the Round!`;
+            document.getElementById("roundOverDetail").textContent =
+                `10s captured - Team A: ${state.tensCollected.A}, Team B: ${state.tensCollected.B}. ` +
+                `Tricks won - Team A: ${state.trickWins.A}, Team B: ${state.trickWins.B}. ` +
+                `Match score - Team A: ${state.matchScore.A}, Team B: ${state.matchScore.B}.`;
+            roundOverModal.style.display = "flex";
+            document.getElementById("newRoundBtn").style.display = myRole === "player" ? "inline-block" : "none";
+        } else if (!state.winner) {
+            lastAnnouncedWinner = null;
+            document.getElementById("newRoundBtn").style.display = "none";
+        }
+
+        handleSeatRequestBanner(state);
     }
 
     // ==================================================================
     // Rendering
     // ==================================================================
-    function renderAll() {
-        renderSeatLabels();
-        renderHands();
-        renderCenterPile();
-        renderInfoPanel();
-        renderControls();
-    }
-
-    function renderSeatLabels() {
-        const activeSeat = activeSeatForVisibility();
-        for (const seat of SEATS) {
-            const el = document.getElementById("label-" + seat);
-            const meta = seatMeta[seat];
-            const seatEl = document.querySelector(`.cp-seat[data-seat="${seat}"]`);
-            if (!meta) {
-                const text = roundState ? "Unmanned - auto-playing" : "Waiting...";
-                el.innerHTML = `${text} <span class="cp-role">[BOT] - ${SEAT_POSITION_LABEL[seat]}</span>`;
-                seatEl.classList.toggle("cp-active-turn", roundState && seat === activeSeat);
-                continue;
-            }
-            const roleTag = meta.type === "human" ? "[HUMAN]" : "[BOT]";
-            el.innerHTML = `${meta.name} <span class="cp-role">${roleTag} - ${SEAT_POSITION_LABEL[seat]}</span>`;
-            seatEl.classList.toggle("cp-active-turn", roundState && seat === activeSeat);
-        }
-    }
-
     function makeCardEl(card, faceUp, clickable, mini) {
         const div = document.createElement("div");
         div.className = "cp-card" + (mini ? " cp-mini" : "");
@@ -393,180 +244,141 @@
         return div;
     }
 
-    function renderHands() {
-        if (!roundState) {
-            for (const seat of SEATS) document.getElementById("hand-" + seat).innerHTML = "";
-            return;
-        }
+    function cardKey(card) {
+        return card.suit + card.rank;
+    }
 
-        const turnSeat = roundState.phase === "playing" ? CourtPieceEngine.currentTurnSeat(roundState) : null;
+    function renderAll(state) {
+        renderSeatLabels(state);
+        renderHands(state);
+        renderCenterPile(state);
+        renderInfoPanel(state);
+        renderControls(state);
+        renderSpectatorSidebar(state);
+    }
 
-        for (const seat of SEATS) {
-            const container = document.getElementById("hand-" + seat);
-            container.innerHTML = "";
-            const hand = roundState.hands[seat];
-            const visible = isHandVisible(seat);
-            const legal = visible && turnSeat === seat
-                ? CourtPieceEngine.legalMoves(hand, roundState.ledSuit)
-                : [];
-
-            hand.forEach(card => {
-                const isLegal = legal.some(c => CourtPieceEngine.cardKey(c) === CourtPieceEngine.cardKey(card));
-                const clickHandler = isLegal ? () => onCardClick(seat, card) : null;
-                container.appendChild(makeCardEl(card, visible, clickHandler, false));
-            });
+    function renderSeatLabels(state) {
+        for (const seatEl of document.querySelectorAll(".cp-seat")) {
+            const seat = seatEl.dataset.seat;
+            const label = document.getElementById("label-" + seat);
+            const isMine = mySeats.includes(seat);
+            const roleTag = state.occupied.includes(seat) ? (isMine ? "[YOU]" : "[PLAYER]") : "";
+            label.innerHTML = `${seatLabelText(seat, state)} <span class="cp-role">${roleTag} ${seat} (${SEAT_POSITION_LABEL[seat]}) - Team ${SEAT_TEAM[seat]}</span>`;
+            seatEl.classList.toggle("cp-active-turn", state.currentTurnSeat === seat);
         }
     }
 
-    function renderCenterPile() {
+    function renderHands(state) {
+        for (const seat of SEATS) {
+            const container = document.getElementById("hand-" + seat);
+            container.innerHTML = "";
+
+            if (mySeats.includes(seat) && state.myHands[seat]) {
+                const hand = state.myHands[seat];
+                const legal = Array.isArray(state.legalForMe[seat]) ? state.legalForMe[seat] : [];
+                hand.forEach(card => {
+                    const isLegal = legal.some(c => cardKey(c) === cardKey(card));
+                    const handler = isLegal ? () => playCard(seat, card) : null;
+                    container.appendChild(makeCardEl(card, true, handler, false));
+                });
+            } else {
+                const count = state.handCounts[seat] || 0;
+                for (let i = 0; i < count; i++) {
+                    container.appendChild(makeCardEl(null, false, null, false));
+                }
+            }
+        }
+    }
+
+    function playCard(seat, card) {
+        if (!mySeats.includes(seat)) return;
+        socket.send(JSON.stringify({ type: "play_card", card }));
+    }
+
+    function renderCenterPile(state) {
         const pile = document.getElementById("centerPile");
         pile.innerHTML = "";
-        if (!roundState) return;
 
-        if (roundState.currentTrick.length) {
-            roundState.currentTrick.forEach(play => {
-                const el = makeCardEl(play.card, true, null, true);
-                pile.appendChild(el);
+        if (state.currentTrick && state.currentTrick.length) {
+            state.currentTrick.forEach(play => {
+                pile.appendChild(makeCardEl(play.card, true, null, true));
             });
         } else {
-            const stacked = roundState.pendingPile.length / 4;
-            for (let i = 0; i < Math.min(stacked, 6); i++) {
+            for (let i = 0; i < Math.min(state.pendingPileTricks || 0, 6); i++) {
                 pile.appendChild(makeCardEl(null, false, null, true));
             }
         }
     }
 
-    function renderInfoPanel() {
-        document.getElementById("trumpDisplay").textContent = roundState && roundState.trumpSuit
-            ? `${roundState.trumpSuit} ${suitName(roundState.trumpSuit)}`
-            : "Not yet chosen";
+    function renderInfoPanel(state) {
+        document.getElementById("trumpDisplay").textContent = state.trumpSuit
+            ? `${state.trumpSuit} ${suitName(state.trumpSuit)}` : "Not yet chosen";
 
-        document.getElementById("lastTrickDisplay").textContent = roundState && roundState.lastTrickInfo
-            ? `${seatLabel(roundState.lastTrickInfo.winnerSeat)}`
-            : "-";
+        document.getElementById("lastTrickDisplay").textContent = state.lastTrickWinnerSeat
+            ? `${seatLabelText(state.lastTrickWinnerSeat, state)} (${state.lastTrickWinnerSeat})` : "-";
 
-        const pileTricks = roundState ? roundState.pendingPile.length / 4 : 0;
-        document.getElementById("pileDisplay").textContent = `${pileTricks} trick(s) uncollected`;
+        document.getElementById("pileDisplay").textContent = `${state.pendingPileTricks || 0} trick(s) uncollected`;
 
-        const tensA = roundState ? CourtPieceEngine.countTens(roundState.collected.A) : 0;
-        const tensB = roundState ? CourtPieceEngine.countTens(roundState.collected.B) : 0;
-        document.getElementById("scoreA").textContent = tensA;
-        document.getElementById("scoreB").textContent = tensB;
-        document.getElementById("tricksA").textContent = roundState ? roundState.trickWins.A : 0;
-        document.getElementById("tricksB").textContent = roundState ? roundState.trickWins.B : 0;
+        document.getElementById("scoreA").textContent = state.tensCollected.A;
+        document.getElementById("scoreB").textContent = state.tensCollected.B;
+        document.getElementById("tricksA").textContent = state.trickWins.A;
+        document.getElementById("tricksB").textContent = state.trickWins.B;
+        document.getElementById("matchScoreDisplay").textContent =
+            `Match score - Team A: ${state.matchScore.A}, Team B: ${state.matchScore.B}`;
     }
 
-    function renderControls() {
+    function renderControls(state) {
         const leaveTableBtn = document.getElementById("leaveTableBtn");
-        if (mode !== "online" || !room) {
-            leaveTableBtn.style.display = "none";
-            return;
-        }
-        const yourSeat = SEATS.find(s => seatMeta[s] && seatMeta[s].isYou);
-        leaveTableBtn.style.display = yourSeat ? "inline-block" : "none";
+        leaveTableBtn.style.display = (myRole === "player") ? "inline-block" : "none";
     }
-
-    document.getElementById("leaveTableBtn").addEventListener("click", () => {
-        const yourSeat = SEATS.find(s => seatMeta[s] && seatMeta[s].isYou);
-        if (!yourSeat || !room) return;
-        CourtPieceRoom.leaveTable(room, yourSeat);
-    });
-
-    document.getElementById("leaveGameBtn").addEventListener("click", () => {
-        if (room) CourtPieceRoom.teardown(room);
-        room = null;
-        roundState = null;
-        seatMeta = {};
-        tableScreen.style.display = "none";
-        configScreen.style.display = "flex";
-        configMessage.textContent = "";
-    });
 
     // ==================================================================
-    // Spectator sidebar (online mode)
+    // Spectator sidebar + seat requests
     // ==================================================================
     const spectatorSidebar = document.getElementById("spectatorSidebar");
-    const spectatorList = document.getElementById("spectatorList");
-    const requestAnySeatBtn = document.getElementById("requestAnySeatBtn");
+    const requestSeatRow = document.getElementById("requestSeatRow");
 
-    function renderSpectatorSidebar() {
-        if (mode !== "online" || !room) {
+    function renderSpectatorSidebar(state) {
+        if (myRole !== "spectator") {
             spectatorSidebar.style.display = "none";
             return;
         }
         spectatorSidebar.style.display = "block";
-        spectatorList.innerHTML = "";
 
-        if (room.spectators.length === 0) {
-            spectatorList.innerHTML = '<div class="hint">No spectators yet.</div>';
-        }
+        const list = document.getElementById("spectatorList");
+        list.innerHTML = `<div class="hint">Spectator count: ${state.spectatorCount}</div>`;
 
-        room.spectators.forEach(spec => {
-            const row = document.createElement("div");
-            row.className = "cp-spectator-row";
-            row.innerHTML = `<span>${spec.name}${spec.isYou ? " (you)" : ""}</span>`;
-            spectatorList.appendChild(row);
-        });
-
-        const youAreSpectating = room.spectators.some(s => s.isYou);
-        if (youAreSpectating) {
-            requestAnySeatBtn.style.display = "block";
-            renderRequestSeatChoices();
-        } else {
-            requestAnySeatBtn.style.display = "none";
-        }
-    }
-
-    function renderRequestSeatChoices() {
-        requestAnySeatBtn.innerHTML = "Request: ";
-        SEATS.forEach(seat => {
-            if (!room.seats[seat]) return;
+        requestSeatRow.style.display = "block";
+        requestSeatRow.innerHTML = "<strong>Request a seat:</strong><br>";
+        state.occupied.forEach(seat => {
             const btn = document.createElement("button");
             btn.className = "btn-secondary";
-            btn.style.cssText = "width:auto; margin:2px; padding:4px 8px; font-size:11px;";
-            btn.textContent = seat;
-            btn.disabled = !!room.pendingRequest;
+            btn.style.cssText = "width:auto; margin:4px 4px 0 0; padding:5px 10px; font-size:12px;";
+            const alreadyRequested = state.seatRequest && state.seatRequest.seat === seat;
+            btn.textContent = alreadyRequested ? `${seat} (requested...)` : `Request ${seat}`;
+            btn.disabled = !!state.seatRequest;
             btn.addEventListener("click", () => {
-                const you = room.spectators.find(s => s.isYou);
-                if (you) CourtPieceRoom.requestSeat(room, you.id, seat);
+                socket.send(JSON.stringify({ type: "request_seat", seat }));
             });
-            requestAnySeatBtn.appendChild(btn);
+            requestSeatRow.appendChild(btn);
         });
     }
 
-    // ==================================================================
-    // Incoming seat request targeting the human's own seat
-    // ==================================================================
-    const seatRequestModal = document.getElementById("seatRequestModal");
-    let shownRequestKey = null;
-
-    function maybeShowIncomingSeatRequest() {
-        const req = room && room.pendingRequest;
+    function handleSeatRequestBanner(state) {
+        const req = state.seatRequest;
         if (!req) {
             seatRequestModal.style.display = "none";
             shownRequestKey = null;
             return;
         }
-        const targetMeta = seatMeta[req.targetSeat];
-        if (!targetMeta || !targetMeta.isYou) return;
+        if (myRole !== "player" || !mySeats.includes(req.seat)) return;
 
-        const key = req.spectatorId + ":" + req.targetSeat;
+        const key = req.seat + ":" + req.requesterName;
         if (shownRequestKey === key) return;
         shownRequestKey = key;
 
         document.getElementById("seatRequestText").textContent =
-            `${req.spectatorName} is requesting your seat (${req.targetSeat}). Give it up?`;
+            `${req.requesterName} is requesting your seat (${req.seat}). Give it up?`;
         seatRequestModal.style.display = "flex";
     }
-
-    document.getElementById("seatRequestAcceptBtn").addEventListener("click", () => {
-        seatRequestModal.style.display = "none";
-        shownRequestKey = null;
-        CourtPieceRoom.respondToRequest(room, true);
-    });
-    document.getElementById("seatRequestDeclineBtn").addEventListener("click", () => {
-        seatRequestModal.style.display = "none";
-        shownRequestKey = null;
-        CourtPieceRoom.respondToRequest(room, false);
-    });
 })();
