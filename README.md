@@ -1,6 +1,6 @@
-# GameHub (Multiplayer Tic Tac Toe)
+# GameHub
 
-A real-time multiplayer game platform with email-based accounts, starting with Tic Tac Toe. Built with FastAPI (WebSockets) on the backend and plain HTML/CSS/vanilla JS on the frontend - no frontend framework or build step. Backend and frontend are two independently deployable services: the backend is a pure JSON + WebSocket API (no HTML), and the frontend is fully static files that call it - see "Architecture" below.
+A real-time multiplayer game platform with email-based accounts - Tic Tac Toe, Connect Four, Ludo, and Court Piece, playable on the web or the native mobile app. Built with FastAPI (WebSockets) on the backend and plain HTML/CSS/vanilla JS on the frontend - no frontend framework or build step. The backend is a pure JSON + WebSocket API (no HTML) and the frontend is fully static files that call it, but both are packaged into one container and deployed together as a single Cloud Run service - see "Architecture" below.
 
 ## Features
 
@@ -55,7 +55,9 @@ response instead of a server-side redirect.
 ## Project structure
 
 Backend and frontend are fully separate top-level directories with no
-shared files - the backend never reads from or serves `frontend/`.
+shared files or shared code - the backend never reads from or serves
+`frontend/` directly (Caddy does that) - even though both end up in the
+same container image at build time.
 
 ```
 .
